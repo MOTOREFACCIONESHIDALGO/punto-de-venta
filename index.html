@@ -128,6 +128,38 @@ main{padding:14px 16px 120px}
   .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (max-width:360px){.grid{gap:8px}}
+
+/* ===== administración ===== */
+.adm{position:fixed;inset:0;z-index:45;background:var(--bg);overflow:auto;-webkit-overflow-scrolling:touch}
+.admtop{position:sticky;top:0;z-index:3;background:var(--brand);color:var(--brand-ink);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;font-size:17px;min-height:54px}
+.admtabs{position:sticky;top:54px;z-index:2;display:flex;gap:6px;overflow-x:auto;padding:10px 12px;background:var(--bg);border-bottom:1px solid var(--line)}
+.admtabs button{border:0;background:var(--card);padding:10px 14px;border-radius:999px;font-weight:600;color:var(--muted);white-space:nowrap;min-height:44px;box-shadow:var(--shadow)}
+.admtabs button.on{background:var(--brand);color:var(--brand-ink)}
+.admbody{padding:12px 16px 80px;max-width:1000px;margin:0 auto}
+.acard{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px;margin-bottom:12px}
+.tools2{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}
+.btn.auto{width:auto;padding:10px 16px;min-height:44px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:2px 12px}
+.arow{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:8px;cursor:pointer}
+.arow.nopoint{cursor:default}
+.arow .th{position:relative;width:52px;height:52px;flex:0 0 52px;border-radius:9px;background:var(--soft);overflow:hidden;display:flex;align-items:center;justify-content:center}
+.arow .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ini2{font-weight:700;color:var(--muted)}
+.arow .mid{flex:1;min-width:0}
+.arow .mid b{display:block;overflow-wrap:anywhere}
+.arow small{color:var(--muted);font-size:12px;display:block;overflow-wrap:anywhere}
+.arow .rt{text-align:right;white-space:nowrap}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px}
+.stat{background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:10px 12px}
+.stat small{color:var(--muted);display:block;font-size:12px}
+.stat b{font-size:20px}
+.chk{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--ink);margin:10px 0}
+.chk input{width:22px;height:22px;flex:0 0 22px}
+.warnbox{border:1px solid var(--warn);color:var(--warn)}
+.up{color:var(--danger)}
+.down{color:var(--ok)}
+.bigph.sm{aspect-ratio:16/9;cursor:default}
+.okmsg{color:var(--ok);font-size:14px;min-height:20px}
 </style>
 </head>
 <body>
@@ -282,12 +314,71 @@ main{padding:14px 16px 120px}
   <button class="btn" id="scanClose" style="margin-top:6px">Listo</button>
 </div></div>
 
-<!-- ============ MODAL: ADMINISTRACIÓN (marcador; lo reemplaza la Parte 3) ============ -->
-<div class="modal" id="mAdmin" role="dialog" aria-modal="true"><div class="sheet">
-  <h2>Administración</h2>
-  <p class="hint" style="font-size:15px">Las pantallas de administración (productos, fotos, departamentos, usuarios, precios y ajustes) se activan con la Parte 3.</p>
-  <button class="btn" id="admClose">Cerrar</button>
+<!-- ============ ADMINISTRACIÓN (pantalla completa, solo admin) ============ -->
+<div id="adm" class="adm" hidden>
+  <div class="admtop"><b>Administración</b><button class="chip" id="admX">Cerrar ✕</button></div>
+  <nav class="admtabs" id="admTabs">
+    <button data-t="prod" class="on">Productos</button>
+    <button data-t="dep">Departamentos</button>
+    <button data-t="usr">Usuarios</button>
+    <button data-t="pre">Precios</button>
+    <button data-t="ven">Ventas del día</button>
+    <button data-t="aju">Ajustes</button>
+  </nav>
+  <div class="admbody" id="admBody"></div>
+</div>
+
+<!-- ADMIN: editar / crear producto -->
+<div class="modal" id="mProd" role="dialog" aria-modal="true"><div class="sheet" style="max-width:540px">
+  <h2 id="epTitle">Producto</h2>
+  <div id="epPhotoBox">
+    <div class="bigph sm" id="epPhoto"></div>
+    <div class="row">
+      <button class="btn sec auto" id="epCam" type="button">📷 Tomar foto</button>
+      <button class="btn sec auto" id="epGal" type="button">🖼 Galería</button>
+    </div>
+    <input type="file" id="epFileCam" accept="image/*" capture="environment" hidden>
+    <input type="file" id="epFileGal" accept="image/*" hidden>
+  </div>
+  <div class="hint" id="epPhotoMsg"></div>
+  <div class="fgrid">
+    <div><label for="epCod">Código</label><input id="epCod" autocapitalize="characters" autocomplete="off"></div>
+    <div style="grid-column:1/-1"><label for="epDesc">Descripción</label><input id="epDesc" autocomplete="off"></div>
+    <div><label for="epPm">Precio manual (opcional)</label><input id="epPm" type="number" min="0" step="0.01" inputmode="decimal"></div>
+    <div><label for="epEx">Existencia</label><input id="epEx" type="number" min="0" step="1" inputmode="numeric"></div>
+    <div><label for="epUb">Ubicación</label><input id="epUb" autocomplete="off"></div>
+    <div><label for="epDep">Departamento</label><input id="epDep" list="dlDeps" autocomplete="off"></div>
+    <div><label for="epPz">Piezas por unidad</label><input id="epPz" type="number" min="1" step="1" inputmode="numeric"></div>
+    <div><label for="epFijo">Proveedor fijo</label><select id="epFijo"></select></div>
+  </div>
+  <datalist id="dlDeps"></datalist>
+  <div class="hint" id="epInfo"></div>
+  <div class="err" id="epErr" role="alert"></div>
+  <div class="row" style="margin-top:8px">
+    <button class="btn sec" id="epCancel" type="button">Cancelar</button>
+    <button class="btn" id="epSave" type="button">Guardar</button>
+  </div>
 </div></div>
+
+<!-- ADMIN: crear / editar usuario -->
+<div class="modal" id="mUser" role="dialog" aria-modal="true"><form class="sheet" id="userForm" style="max-width:500px" autocomplete="off">
+  <h2 id="usTitle">Usuario</h2>
+  <div class="fgrid">
+    <div><label for="usUser">Usuario (para entrar)</label><input id="usUser" autocapitalize="off" autocorrect="off" spellcheck="false" required></div>
+    <div><label for="usName">Nombre</label><input id="usName" required></div>
+    <div><label for="usRol">Rol</label><select id="usRol"><option value="vendedor">Vendedor</option><option value="admin">Administrador</option></select></div>
+    <div><label for="usPref">Letra del folio (1 a 3)</label><input id="usPref" maxlength="3" autocapitalize="characters" required></div>
+    <div><label for="usSuc">Sucursal</label><input id="usSuc" value="Principal"></div>
+    <div><label for="usPass" id="usPassL">Contraseña</label><input id="usPass" type="password" autocomplete="new-password"></div>
+  </div>
+  <label class="chk" for="usAct"><input type="checkbox" id="usAct" checked> Usuario activo</label>
+  <div class="hint">Mínimo 6 caracteres en la contraseña. Al editar, déjala vacía para no cambiarla.</div>
+  <div class="err" id="usErr" role="alert"></div>
+  <div class="row" style="margin-top:8px">
+    <button class="btn sec" id="usCancel" type="button">Cancelar</button>
+    <button class="btn" id="usOk" type="submit">Guardar</button>
+  </div>
+</form></div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -348,6 +439,7 @@ async function api(action,data){
 function screen(id){$$('.screen').forEach(s=>s.classList.toggle('on',s.id===id))}
 function endSession(msg){
   S.token='';S.user=null;S.prods=[];S.byCode={};S.cart=[];S.auth=null;S.lastSale=null;
+  S.admOpen=false;$('#adm').hidden=true;document.body.style.overflow='';A.prev=null;A.dirty=false;
   ssDel('pos_tok');ssDel('pos_user');
   $$('.modal.on').forEach(m=>m.classList.remove('on'));
   $('#cart').classList.remove('open');
@@ -726,7 +818,7 @@ $('#scanClose').addEventListener('click',closeScanner);
 (function(){
   let buf='',last=0;
   document.addEventListener('keydown',e=>{
-    if(!S.token||modalOpen())return;
+    if(!S.token||modalOpen()||S.admOpen)return;
     const t=e.target;
     if(t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))return;
     const now=Date.now();
@@ -739,12 +831,362 @@ $('#scanClose').addEventListener('click',closeScanner);
 })();
 
 /* ===================================================================
-   MENÚ DE ADMINISTRACIÓN (la Parte 3 expone window.Admin.abrir)
+   ADMINISTRACIÓN (solo rol admin; el servidor vuelve a validar todo)
    =================================================================== */
-$('#btnAdmin').addEventListener('click',()=>{
-  if(window.Admin&&typeof window.Admin.abrir==='function')window.Admin.abrir();else openM('#mAdmin');
+const PROVS=['ALESSIA','ITALIKA','DAV','ZARCO','TMMP','SAYTO','LUCES','MULTIMOTO','EXTERNOS'];
+const A={tab:'prod',dirty:false,prev:null,editCode:null,editNew:false,editUser:null,deps:null,users:[]};
+const pf={q:'',dep:'',f:''};
+const admBody=()=>$('#admBody');
+const errMsg=e=>(e&&e.message)?e.message:'Error';
+const failToast=e=>{if(e&&e.code!=='SESION')toast(errMsg(e))};
+const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+async function busy(btn,txt,fn){if(!btn||btn.disabled)return;const t=btn.textContent;btn.disabled=true;btn.textContent=txt;try{return await fn()}finally{btn.disabled=false;btn.textContent=t}}
+function loadingBox(msg){admBody().innerHTML='<div class="acard hint">'+esc(msg||'Cargando…')+'</div>'}
+function downloadCsv(name,rows){
+  const csv=rows.map(r=>r.map(v=>{v=String(v==null?'':v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(',')).join('\r\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));a.download=name;
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
+}
+
+function admOpen(){
+  if(!S.user||S.user.rol!=='admin')return;
+  S.admOpen=true;$('#adm').hidden=false;document.body.style.overflow='hidden';admTab(A.tab||'prod');
+}
+function admClose(){
+  S.admOpen=false;$('#adm').hidden=true;document.body.style.overflow='';
+  ['#mProd','#mUser'].forEach(closeM);
+  if(A.dirty){A.dirty=false;loadCatalog().then(renderAll).catch(()=>{})}
+}
+function admTab(t){
+  A.tab=t;$$('#admTabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  $('#adm').scrollTop=0;
+  ({prod:admProd,dep:admDeps,usr:admUsers,pre:admPrecios,ven:admVentas,aju:admAjustes})[t]();
+}
+$('#btnAdmin').addEventListener('click',admOpen);
+$('#admX').addEventListener('click',admClose);
+$('#admTabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b)admTab(b.dataset.t)});
+window.Admin={abrir:admOpen,cerrar:admClose};
+
+/* ---------- Productos ---------- */
+function admProd(){
+  const deps=Array.from(new Set(S.prods.map(p=>p.depto||'').filter(Boolean))).sort((a,b)=>a.localeCompare(b,'es'));
+  const flts=[['','Todos'],['alerta','Con precio bajo el costo'],['sinprecio','Sin precio'],['sindep','Sin departamento'],['sinfoto','Sin foto'],['agotado','Agotados']];
+  admBody().innerHTML=
+    '<div class="acard"><div class="tools2">'+
+      '<input id="pq" type="search" placeholder="Buscar por nombre o código…" value="'+esc(pf.q)+'" autocomplete="off">'+
+      '<select id="pdep" aria-label="Departamento"><option value="">Todos los departamentos</option>'+deps.map(d=>'<option'+(d===pf.dep?' selected':'')+'>'+esc(d)+'</option>').join('')+'</select>'+
+      '<select id="pflt" aria-label="Filtro">'+flts.map(o=>'<option value="'+o[0]+'"'+(o[0]===pf.f?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'+
+    '</div><div class="row" style="margin-top:10px"><button class="btn auto" data-act="pNew">+ Nuevo producto</button><button class="btn sec auto" data-act="pBatch">Subir fotos por lote</button></div>'+
+    '<input type="file" id="batchFile" accept="image/*" multiple hidden>'+
+    '<div class="hint">Fotos por lote: el nombre de cada archivo debe ser el código del producto (por ejemplo ZOQ3-003.jpg).</div><div class="hint" id="batchInfo"></div></div>'+
+    '<div class="hint" id="pInfo"></div><div id="pList"></div>';
+  admProdList();
+}
+function admProdList(){
+  const box=$('#pList');if(!box)return;
+  const words=norm(pf.q).split(/\s+/).filter(Boolean);
+  const list=S.prods.filter(p=>{
+    if(pf.dep&&(p.depto||'')!==pf.dep)return false;
+    if(pf.f==='alerta'&&!p.alerta)return false;
+    if(pf.f==='sinprecio'&&p.precio>0)return false;
+    if(pf.f==='sindep'&&p.depto)return false;
+    if(pf.f==='sinfoto'&&p.foto)return false;
+    if(pf.f==='agotado'&&p.existencia>0)return false;
+    return words.every(w=>p._n.indexOf(w)>=0);
+  });
+  const MAXR=150;
+  $('#pInfo').textContent=list.length>MAXR?('Mostrando '+MAXR+' de '+list.length+'. Usa el buscador o los filtros.'):(list.length+' producto'+(list.length===1?'':'s'));
+  box.innerHTML=list.slice(0,MAXR).map(p=>{
+    const flags=(!(p.precio>0)?'<span class="tag red">Sin precio</span> ':'')+(p.alerta?'<span class="tag red">Precio bajo costo</span> ':'')+
+      (Number(p.pmanual)>0?'<span class="tag">Precio manual</span> ':'')+(!p.depto?'<span class="tag">Sin depto</span> ':'')+(p.existencia<=0?'<span class="tag">Agotado</span> ':'');
+    return '<div class="arow" data-c="'+esc(p.codigo)+'" role="button" tabindex="0"><div class="th">'+(p.foto?'<img class="phimg" loading="lazy" src="'+esc(fotoUrl(p.foto,120))+'" alt="">':'')+'<span class="ini2">'+esc((p.desc||'?').trim().charAt(0).toUpperCase())+'</span></div>'+
+      '<div class="mid"><b>'+esc(p.desc)+'</b><small>'+esc(p.codigo)+' · '+esc(p.depto||'(sin departamento)')+(p.ubicacion?' · '+esc(p.ubicacion):'')+'</small><div>'+flags+'</div></div>'+
+      '<div class="rt"><b'+(p.alerta?' class="up"':'')+'>'+(p.precio>0?fmt(p.precio):'—')+'</b><small>Exist: '+p.existencia+'</small></div></div>';
+  }).join('')||'<div class="acard hint">No hay productos con ese filtro.</div>';
+}
+function resizeJpeg(file,max){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file);const img=new Image();
+    img.onload=()=>{
+      let w=img.naturalWidth,h=img.naturalHeight;const k=Math.min(1,max/Math.max(w,h));w=Math.max(1,Math.round(w*k));h=Math.max(1,Math.round(h*k));
+      const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);const d=c.toDataURL('image/jpeg',0.8);res({b64:d.split(',')[1],preview:d});
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('No se pudo leer la imagen'))};
+    img.src=url;
+  });
+}
+async function uploadPhotoFor(code,file){
+  const r=await resizeJpeg(file,1000);
+  const j=await api('uploadPhoto',{codigo:code,data:r.b64});
+  const p=getP(code);if(p)p.foto=j.foto;A.dirty=true;
+  return r.preview;
+}
+async function admBatch(files){
+  files=Array.prototype.slice.call(files||[]);if(!files.length)return;
+  const info=$('#batchInfo');const map={};S.prods.forEach(p=>{map[String(p.codigo).toUpperCase()]=p.codigo});
+  let ok=0;const miss=[],fail=[];
+  for(let i=0;i<files.length;i++){
+    const f=files[i];if(info)info.textContent='Subiendo '+(i+1)+' de '+files.length+': '+f.name;
+    const code=map[f.name.replace(/\.[^.]+$/,'').trim().toUpperCase()];
+    if(!code){miss.push(f.name);continue}
+    try{await uploadPhotoFor(code,f);ok++}catch(e){if(e.code==='SESION')return;fail.push(f.name+' ('+errMsg(e)+')')}
+  }
+  if(info)info.innerHTML='Listo: <b>'+ok+'</b> foto'+(ok===1?'':'s')+' subida'+(ok===1?'':'s')+'.'+
+    (miss.length?'<br>Sin producto con ese código ('+miss.length+'): '+esc(miss.slice(0,8).join(', '))+(miss.length>8?'…':''):'')+
+    (fail.length?'<br>Con error: '+esc(fail.slice(0,5).join('; ')):'');
+  admProdList();
+}
+function admEdit(code,isNew){
+  A.editNew=!!isNew;A.editCode=isNew?null:code;
+  const p=isNew?null:getP(code);if(!isNew&&!p)return;
+  $('#epTitle').textContent=isNew?'Nuevo producto':'Editar producto';
+  $('#epCod').value=p?p.codigo:'';$('#epCod').readOnly=!isNew;
+  $('#epDesc').value=p?p.desc:'';
+  $('#epPm').value=p&&Number(p.pmanual)>0?p.pmanual:'';
+  $('#epEx').value=p?p.existencia:0;$('#epUb').value=p?p.ubicacion:'';$('#epDep').value=p?p.depto:'';$('#epPz').value=p?p.pzas:1;
+  $('#epFijo').innerHTML='<option value="">(ninguno)</option>'+PROVS.map(v=>'<option'+(p&&String(p.fijo||'').toUpperCase()===v?' selected':'')+'>'+v+'</option>').join('');
+  $('#dlDeps').innerHTML=Array.from(new Set(S.prods.map(x=>x.depto).filter(Boolean))).sort().map(d=>'<option value="'+esc(d)+'">').join('');
+  $('#epPhotoBox').hidden=!!isNew;
+  $('#epPhoto').innerHTML='<span class="ini">'+esc(p?(p.desc||'?').trim().charAt(0).toUpperCase():'+')+'</span>'+(p&&p.foto?'<img src="'+esc(fotoUrl(p.foto,600))+'" alt="">':'');
+  $('#epPhotoMsg').textContent=isNew?'Guarda el producto primero; después podrás agregar su foto.':'';
+  $('#epInfo').textContent=p?('Precio de venta actual: '+(p.precio>0?fmt(p.precio):'sin precio')+' · Costo: '+(p.costo===''||p.costo==null?'—':fmt(p.costo))+' · Proveedor: '+(p.proveedor||'—')+'. Deja el precio manual vacío para usar el de tus listas.'):'Un producto nuevo necesita descripción y precio manual para poder venderse.';
+  $('#epErr').textContent='';openM('#mProd');
+}
+async function admSaveProd(){
+  const err=$('#epErr');err.textContent='';
+  const cod=$('#epCod').value.trim(),desc=$('#epDesc').value.trim();
+  const ex=$('#epEx').value.trim(),pz=$('#epPz').value.trim(),pmRaw=$('#epPm').value.trim();
+  if(!cod){err.textContent='Escribe el código.';return}
+  if(!desc){err.textContent='Escribe la descripción.';return}
+  if(ex===''||!/^\d+$/.test(ex)){err.textContent='La existencia debe ser un número entero, 0 o mayor.';return}
+  if(pz===''||!/^\d+$/.test(pz)||Number(pz)<1){err.textContent='Piezas por unidad: un entero de 1 o más.';return}
+  if(pmRaw!==''&&(isNaN(Number(pmRaw))||Number(pmRaw)<0)){err.textContent='El precio manual no es válido.';return}
+  if(A.editNew&&!(Number(pmRaw)>0)){err.textContent='Un producto nuevo necesita un precio manual mayor a 0.';return}
+  const data={codigo:cod,existencia:Number(ex),ubicacion:$('#epUb').value.trim(),depto:$('#epDep').value.trim(),pzas:Number(pz),fijo:$('#epFijo').value,pmanual:pmRaw===''?'':Number(pmRaw)};
+  if(A.editNew){data.nuevo=true;data.dmanual=desc}
+  else{const p=getP(A.editCode);if(p&&desc!==p.desc)data.dmanual=desc}
+  await busy($('#epSave'),'Guardando…',async()=>{
+    try{
+      await api('saveProduct',data);A.dirty=true;
+      await loadCatalog();closeM('#mProd');
+      if(A.tab==='prod')admProdList();
+      toast(A.editNew?'Producto creado':'Producto guardado');
+    }catch(e){if(e.code!=='SESION')err.textContent=errMsg(e)}
+  });
+}
+async function epPhotoFile(file){
+  if(!file||!A.editCode)return;const msg=$('#epPhotoMsg');msg.textContent='Subiendo foto…';
+  try{const prev=await uploadPhotoFor(A.editCode,file);$('#epPhoto').innerHTML='<img src="'+esc(prev)+'" alt="">';msg.textContent='Foto guardada ✓'}
+  catch(e){msg.textContent='';failToast(e)}
+}
+$('#epCam').addEventListener('click',()=>$('#epFileCam').click());
+$('#epGal').addEventListener('click',()=>$('#epFileGal').click());
+['#epFileCam','#epFileGal'].forEach(id=>$(id).addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];e.target.value='';epPhotoFile(f)}));
+$('#epSave').addEventListener('click',admSaveProd);
+$('#epCancel').addEventListener('click',()=>closeM('#mProd'));
+
+/* ---------- Departamentos ---------- */
+async function admDeps(){
+  loadingBox();
+  try{A.deps=await api('listDeps');admDepsRender()}
+  catch(e){failToast(e);admBody().innerHTML='<div class="acard err">'+esc(errMsg(e))+'</div>'}
+}
+function admDepsRender(){
+  const j=A.deps;
+  admBody().innerHTML='<div class="acard"><div class="hint">Marca como <b>eléctrico</b> los departamentos que no aceptan cambios ni devoluciones. Si renombras uno con el nombre de otro que ya existe, se unen.</div>'+
+    '<div class="row" style="margin-top:8px;align-items:center"><input id="depNew" placeholder="Nuevo departamento" autocomplete="off"><button class="btn auto" data-act="depAdd" style="flex:0 0 auto">Agregar</button></div></div>'+
+    (j.sinDepto?'<div class="acard"><b>'+j.sinDepto+'</b> producto'+(j.sinDepto===1?'':'s')+' sin departamento. <button class="btn sec auto" data-act="depGo">Verlos</button></div>':'')+
+    '<div>'+j.departamentos.map(d=>'<div class="arow nopoint"><div class="mid"><b>'+esc(d.nombre)+'</b><small>'+d.productos+' producto'+(d.productos===1?'':'s')+'</small></div>'+
+      '<label class="chk" style="margin:0"><input type="checkbox" class="elchk" data-d="'+esc(d.nombre)+'" '+(d.electrico?'checked':'')+'> Eléctrico</label>'+
+      '<button class="btn sec auto" data-act="depRename" data-d="'+esc(d.nombre)+'">Renombrar</button></div>').join('')+'</div>';
+}
+async function toggleEl(chk){
+  const v=chk.checked;chk.disabled=true;
+  try{await api('saveDep',{nombre:chk.dataset.d,electrico:v});A.dirty=true;toast(chk.dataset.d+(v?': eléctrico (sin cambios ni devoluciones)':': ya no es eléctrico'))}
+  catch(e){chk.checked=!v;failToast(e)}
+  chk.disabled=false;
+}
+
+/* ---------- Usuarios ---------- */
+async function admUsers(){
+  loadingBox();
+  try{const j=await api('listUsers');A.users=j.usuarios;admUsersRender()}
+  catch(e){failToast(e);admBody().innerHTML='<div class="acard err">'+esc(errMsg(e))+'</div>'}
+}
+function admUsersRender(){
+  admBody().innerHTML='<div class="acard"><div class="row" style="align-items:center"><div class="hint" style="margin:0">Los vendedores solo ven productos y hacen ventas. Cada usuario tiene su propia letra de folio.</div><button class="btn auto" data-act="usNew" style="flex:0 0 auto">+ Nuevo usuario</button></div></div>'+
+    '<div>'+A.users.map(u=>'<div class="arow nopoint"><div class="mid"><b>'+esc(u.nombre)+'</b><small>Usuario: '+esc(u.usuario)+' · '+(u.rol==='admin'?'Administrador':'Vendedor')+' · Folio '+esc(u.prefijo)+'-… · '+esc(u.sucursal)+'</small>'+
+      (u.activo?'':'<span class="tag red">Desactivado</span>')+'</div><button class="btn sec auto" data-act="usEdit" data-u="'+esc(u.usuario)+'">Editar</button></div>').join('')+'</div>';
+}
+function openUser(usuario){
+  const u=usuario?A.users.find(x=>x.usuario===usuario):null;A.editUser=u?u.usuario:null;
+  $('#usTitle').textContent=u?'Editar usuario':'Nuevo usuario';
+  $('#usUser').value=u?u.usuario:'';$('#usUser').readOnly=!!u;$('#usName').value=u?u.nombre:'';$('#usRol').value=u?u.rol:'vendedor';
+  $('#usPref').value=u?u.prefijo:'';$('#usSuc').value=u?u.sucursal:'Principal';$('#usPass').value='';$('#usAct').checked=u?u.activo:true;
+  $('#usPassL').textContent=u?'Contraseña nueva (opcional)':'Contraseña';$('#usPass').required=!u;$('#usErr').textContent='';
+  openM('#mUser');
+}
+$('#userForm').addEventListener('submit',async e=>{
+  e.preventDefault();const err=$('#usErr');err.textContent='';
+  const data={usuario:$('#usUser').value.trim().toLowerCase(),nombre:$('#usName').value.trim(),rol:$('#usRol').value,prefijo:$('#usPref').value.trim().toUpperCase(),sucursal:$('#usSuc').value.trim()||'Principal',activo:$('#usAct').checked};
+  const pw=$('#usPass').value;if(pw)data.password=pw;
+  await busy($('#usOk'),'Guardando…',async()=>{
+    try{await api('saveUser',data);closeM('#mUser');toast('Usuario guardado');if(A.tab==='usr')admUsers()}
+    catch(er){if(er.code!=='SESION')err.textContent=errMsg(er)}
+  });
 });
-$('#admClose').addEventListener('click',()=>closeM('#mAdmin'));
+$('#usCancel').addEventListener('click',()=>closeM('#mUser'));
+
+/* ---------- Precios (reporte de cambios antes de aplicar) ---------- */
+function admPrecios(){
+  admBody().innerHTML='<div class="acard"><b>Actualizar precios desde tus listas de proveedores</b>'+
+    '<div class="hint">1) Pega las listas nuevas en las pestañas de tu hoja de Google (ALESSIA, ITALIKA, DAV…). 2) Toca “Calcular cambios”: verás qué precios cambiarían <u>antes</u> de aplicarlos. Regla: si un producto está en varias listas, se usa el precio público más alto.</div>'+
+    '<button class="btn auto" data-act="preCalc" style="margin-top:8px">Calcular cambios</button></div><div id="preOut"></div>';
+  if(A.prev)renderPrev();
+}
+function renderPrev(){
+  const j=A.prev,r=j.resumen;const box=$('#preOut');if(!box)return;
+  let h='';
+  if(j.faltan&&j.faltan.length)h+='<div class="acard warnbox">No encontré estas pestañas de proveedor: <b>'+j.faltan.map(esc).join(', ')+'</b>. Sus precios no se tomaron en cuenta.</div>';
+  h+='<div class="stats">'+[['Productos',r.productos],['Con precio en listas',r.conLista],['Sin lista (no cambian)',r.sinLista],['Cambian de precio',r.cambian],['Saltos grandes (más de 50 %)',r.grandes],['Quedarían bajo el costo',r.bajoCosto]].map(x=>'<div class="stat"><small>'+x[0]+'</small><b>'+x[1]+'</b></div>').join('')+'</div>';
+  h+='<div class="acard"><div class="tools2"><input id="pvQ" type="search" placeholder="Buscar en los cambios…" autocomplete="off"><label class="chk" style="margin:0"><input type="checkbox" id="pvG"> Solo saltos grandes</label></div>'+
+    '<div class="row" style="margin-top:10px"><button class="btn auto" data-act="preApply" '+(r.cambian?'':'disabled')+'>Aplicar estos precios</button><button class="btn sec auto" data-act="preCsv">Descargar reporte (Excel)</button></div></div>'+
+    '<div class="hint" id="pvInfo"></div><div id="pvList"></div>';
+  box.innerHTML=h;renderPrevList();
+}
+function renderPrevList(){
+  const box=$('#pvList');if(!box||!A.prev)return;
+  const g=$('#pvG').checked;const words=norm($('#pvQ').value).split(/\s+/).filter(Boolean);
+  const list=A.prev.cambios.filter(c=>(!g||c.grande)&&words.every(w=>norm(c.codigo+' '+c.desc).indexOf(w)>=0));
+  const MAXR=300;
+  $('#pvInfo').textContent=list.length>MAXR?('Mostrando '+MAXR+' de '+list.length+' (los de mayor cambio primero).'):(list.length+' cambio'+(list.length===1?'':'s'));
+  box.innerHTML=list.slice(0,MAXR).map(c=>{
+    const listas=Object.keys(c.listas||{}).map(k=>esc(k)+' '+fmt(c.listas[k])).join(' · ');
+    const pct=c.difPct==null?'precio nuevo':((c.difPct>0?'+':'')+c.difPct+' %');
+    return '<div class="arow nopoint"><div class="mid"><b>'+esc(c.desc||c.codigo)+'</b><small>'+esc(c.codigo)+' · elegido: '+esc(c.proveedor)+'</small><small>Listas: '+listas+'</small>'+(c.grande?'<span class="tag red">Salto grande: revísalo</span>':'')+'</div>'+
+      '<div class="rt"><small>antes '+fmt(c.actual)+'</small><b>'+fmt(c.nuevo)+'</b><small class="'+(c.difPct>0?'up':'down')+'">'+pct+'</small></div></div>';
+  }).join('')||'<div class="acard hint">No hay cambios con ese filtro.</div>';
+}
+async function prevCalc(el){
+  await busy(el,'Calculando… puede tardar hasta un minuto',async()=>{
+    try{A.prev=await api('previewPrices');renderPrev();toast('Reporte listo. Revísalo antes de aplicar.')}catch(e){failToast(e)}
+  });
+}
+async function prevApply(el){
+  const r=A.prev&&A.prev.resumen;if(!r)return;
+  if(!confirm('Se aplicarán los precios nuevos de '+r.cambian+' productos ('+r.grandes+' con saltos grandes). ¿Continuar?'))return;
+  await busy(el,'Aplicando… no cierres esta pantalla',async()=>{
+    try{
+      const j=await api('applyPrices');A.dirty=true;A.prev=null;await loadCatalog();
+      admPrecios();const o=$('#preOut');if(o)o.innerHTML='<div class="acard"><b>Precios aplicados ✓</b><div class="hint">Productos con lista: '+j.resumen.conLista+' · Sin lista: '+j.resumen.sinLista+' · Quedaron bajo el costo: '+j.resumen.bajoCosto+'. Revisa en Productos con el filtro “Con precio bajo el costo”.</div></div>';
+      toast('Precios aplicados');
+    }catch(e){failToast(e)}
+  });
+}
+function prevCsv(){
+  if(!A.prev)return;
+  const rows=[['Codigo','Descripcion','PrecioActual','PrecioNuevo','CambioPct','Proveedor','SaltoGrande','Listas']];
+  A.prev.cambios.forEach(c=>rows.push([c.codigo,c.desc,c.actual,c.nuevo,c.difPct==null?'':c.difPct,c.proveedor,c.grande?'SI':'',Object.keys(c.listas||{}).map(k=>k+' '+c.listas[k]).join(' | ')]));
+  downloadCsv('cambios_de_precio_'+todayStr()+'.csv',rows);
+}
+
+/* ---------- Ventas del día ---------- */
+function admVentas(){
+  admBody().innerHTML='<div class="acard"><div class="row" style="align-items:flex-end"><div><label for="vDate">Fecha</label><input type="date" id="vDate" value="'+todayStr()+'"></div><button class="btn auto" data-act="venLoad" style="flex:0 0 auto">Ver</button></div></div><div id="venOut"></div>';
+  venLoad();
+}
+async function venLoad(){
+  const out=$('#venOut');if(!out)return;out.innerHTML='<div class="acard hint">Cargando…</div>';
+  try{
+    const j=await api('reportDay',{fecha:$('#vDate').value||todayStr()});
+    const st=[['Ventas',j.num],['Total del día',fmt(j.total)]].concat(Object.keys(j.porMetodo).map(k=>[k,fmt(j.porMetodo[k])]),Object.keys(j.porUsuario).map(k=>['Vendedor: '+k,fmt(j.porUsuario[k])]));
+    out.innerHTML='<div class="stats">'+st.map(x=>'<div class="stat"><small>'+esc(x[0])+'</small><b>'+esc(x[1])+'</b></div>').join('')+'</div>'+
+      (j.ventas.length?j.ventas.map(v=>'<details class="acard"><summary><b>'+esc(v.folio)+'</b> · '+esc(v.hora)+' · '+esc(v.usuario)+' · '+esc(v.metodo)+' · <b>'+fmt(v.total)+'</b>'+(v.estado&&v.estado!=='ACTIVA'?' <span class="tag red">'+esc(v.estado)+'</span>':'')+'</summary>'+
+        v.lineas.map(l=>'<div class="hint">'+l.qty+' × '+esc(l.desc)+' ('+esc(l.codigo)+') — '+fmt(l.importe)+(l.devuelta?' · devueltas: '+l.devuelta:'')+'</div>').join('')+'</details>').join(''):'<div class="acard hint">No hay ventas en esta fecha.</div>');
+  }catch(e){out.innerHTML='';failToast(e)}
+}
+
+/* ---------- Ajustes ---------- */
+function admAjustes(){
+  const c=S.config||{};
+  admBody().innerHTML='<div class="acard"><b>Datos del negocio</b> <span class="hint">(salen en el ticket)</span>'+
+    '<label for="ajNeg">Nombre del negocio</label><input id="ajNeg" value="'+esc(c.Negocio||'')+'">'+
+    '<label for="ajTel">Teléfono</label><input id="ajTel" inputmode="tel" value="'+esc(c.Telefono||'')+'">'+
+    '<label for="ajDir">Dirección</label><input id="ajDir" value="'+esc(c.Direccion||'')+'">'+
+    '<label for="ajLey">Leyenda al pie del ticket</label><textarea id="ajLey" rows="4" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);font:inherit;color:inherit">'+esc(c.Leyenda||'')+'</textarea>'+
+    '<div class="okmsg" id="ajMsg"></div><button class="btn auto" data-act="ajSave">Guardar datos</button></div>'+
+    '<div class="acard"><b>Cambiar mi contraseña</b>'+
+    '<label for="pwA">Contraseña actual</label><input id="pwA" type="password" autocomplete="current-password">'+
+    '<label for="pwN">Contraseña nueva (mínimo 6 caracteres)</label><input id="pwN" type="password" autocomplete="new-password">'+
+    '<label for="pwC">Repite la contraseña nueva</label><input id="pwC" type="password" autocomplete="new-password">'+
+    '<div class="err" id="pwErr" role="alert"></div><button class="btn auto" data-act="ajPass" style="margin-top:6px">Cambiar contraseña</button></div>';
+}
+async function ajSave(el){
+  await busy(el,'Guardando…',async()=>{
+    try{
+      const j=await api('saveConfig',{Negocio:$('#ajNeg').value.trim(),Telefono:$('#ajTel').value.trim(),Direccion:$('#ajDir').value.trim(),Leyenda:$('#ajLey').value.trim()});
+      S.config=j.config||S.config;$('#bizTitle').textContent=S.config.Negocio||'Punto de Venta';document.title=S.config.Negocio||'Punto de Venta';
+      $('#ajMsg').textContent='Guardado ✓';
+    }catch(e){failToast(e)}
+  });
+}
+async function ajPass(el){
+  const err=$('#pwErr');err.textContent='';
+  const a=$('#pwA').value,n=$('#pwN').value,c=$('#pwC').value;
+  if(!a){err.textContent='Escribe tu contraseña actual.';return}
+  if(n.length<6){err.textContent='La contraseña nueva debe tener al menos 6 caracteres.';return}
+  if(n!==c){err.textContent='La contraseña nueva y su repetición no coinciden.';return}
+  await busy(el,'Guardando…',async()=>{
+    try{await api('changePassword',{actual:a,nueva:n});['#pwA','#pwN','#pwC'].forEach(s=>$(s).value='');toast('Contraseña cambiada')}
+    catch(e){if(e.code!=='SESION')err.textContent=errMsg(e)}
+  });
+}
+
+/* ---------- Eventos de las pantallas de administración ---------- */
+const ACT={
+  pNew(){admEdit(null,true)},
+  pBatch(){$('#batchFile').click()},
+  depGo(){pf.f='sindep';pf.dep='';pf.q='';admTab('prod')},
+  async depAdd(el){
+    const n=$('#depNew').value.trim();if(!n){toast('Escribe el nombre del departamento');return}
+    await busy(el,'Agregando…',async()=>{try{await api('saveDep',{nombre:n,electrico:false});A.dirty=true;admDeps()}catch(e){failToast(e)}});
+  },
+  async depRename(el){
+    const nombre=el.dataset.d;const n=prompt('Nuevo nombre para "'+nombre+'" (si ya existe otro con ese nombre, se unirán):',nombre);
+    if(n===null)return;const nn=n.trim().toUpperCase();if(!nn||nn===nombre.toUpperCase())return;
+    const existe=A.deps.departamentos.some(d=>d.nombre.toUpperCase()===nn);
+    if(existe&&!confirm('Ya existe "'+nn+'". ¿Unir los productos de "'+nombre+'" con ese departamento?'))return;
+    try{await api('saveDep',{nombre:nombre,nuevoNombre:nn});A.dirty=true;await loadCatalog();admDeps()}catch(e){failToast(e)}
+  },
+  usNew(){openUser(null)},
+  usEdit(el){openUser(el.dataset.u)},
+  preCalc(el){return prevCalc(el)},
+  preApply(el){return prevApply(el)},
+  preCsv(){prevCsv()},
+  venLoad(){return venLoad()},
+  ajSave(el){return ajSave(el)},
+  ajPass(el){return ajPass(el)}
+};
+let pqT;
+admBody().addEventListener('input',e=>{
+  if(e.target.id==='pq'){pf.q=e.target.value;clearTimeout(pqT);pqT=setTimeout(admProdList,120)}
+  else if(e.target.id==='pvQ'){renderPrevList()}
+});
+admBody().addEventListener('change',e=>{
+  const t=e.target;
+  if(t.id==='pdep'){pf.dep=t.value;admProdList()}
+  else if(t.id==='pflt'){pf.f=t.value;admProdList()}
+  else if(t.id==='batchFile'){const f=t.files;admBatch(f);t.value=''}
+  else if(t.id==='pvG'){renderPrevList()}
+  else if(t.classList&&t.classList.contains('elchk')){toggleEl(t)}
+});
+admBody().addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');
+  if(el){const f=ACT[el.dataset.act];if(f)f(el);return}
+  const row=e.target.closest('.arow[data-c]');if(row)admEdit(row.dataset.c,false);
+});
+admBody().addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList&&e.target.classList.contains('arow')&&e.target.dataset.c){e.preventDefault();admEdit(e.target.dataset.c,false)}});
 
 /* ===================================================================
    GENERAL
@@ -755,7 +1197,9 @@ document.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
   if($('#mScan').classList.contains('on')){closeScanner();return}
   if($('#mAuth').classList.contains('on')){finishAuth(false);return}
-  const m=$$('.modal.on').pop();if(m&&m.id!=='mDone'&&m.id!=='mPay')m.classList.remove('on');
+  const m=$$('.modal.on').pop();
+  if(m){if(m.id!=='mDone'&&m.id!=='mPay')m.classList.remove('on');return}
+  if(S.admOpen)admClose();
 });
 // Puntos de enganche para las partes siguientes (administración, ticket, devoluciones...)
 window.POS={S:S,api:api,toast:toast,esc:esc,fmt:fmt,norm:norm,openM:openM,closeM:closeM,loadCatalog:loadCatalog,renderAll:renderAll,fotoUrl:fotoUrl,handleCode:handleCode};
