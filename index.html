@@ -160,6 +160,19 @@ main{padding:14px 16px 120px}
 .down{color:var(--ok)}
 .bigph.sm{aspect-ratio:16/9;cursor:default}
 .okmsg{color:var(--ok);font-size:14px;min-height:20px}
+
+/* ===== ticket ===== */
+.tkwrap{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;max-height:50vh;overflow:auto;text-align:center;margin:10px 0}
+.tkwrap img{width:100%;max-width:384px;display:block;margin:0 auto}
+.tkbtns{display:grid;gap:8px}
+#printArea{display:none}
+@media print{
+  @page{size:58mm auto;margin:2mm}
+  html,body{background:#fff!important}
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block!important}
+  #printArea img{width:100%;display:block}
+}
 </style>
 </head>
 <body>
@@ -274,6 +287,20 @@ main{padding:14px 16px 120px}
     <button class="btn" id="dNew">Nueva venta</button>
   </div>
 </div></div>
+
+<!-- ============ MODAL: TICKET (vista previa e impresión) ============ -->
+<div class="modal" id="mTicket" role="dialog" aria-modal="true"><div class="sheet" style="max-width:420px">
+  <h2>Ticket</h2>
+  <div class="tkwrap"><img id="tkImg" alt="Vista previa del ticket"></div>
+  <div class="hint" id="tkMsg" role="status"></div>
+  <div class="tkbtns">
+    <button class="btn" id="tkBt" type="button">🖨 Imprimir por Bluetooth</button>
+    <button class="btn sec" id="tkShare" type="button">Compartir / guardar imagen</button>
+    <button class="btn sec" id="tkPrint" type="button">Imprimir (navegador)</button>
+    <button class="btn sec" id="tkClose" type="button">Cerrar</button>
+  </div>
+</div></div>
+<div id="printArea" aria-hidden="true"></div>
 
 <!-- ============ MODAL: CAMBIO DE PRECIO ============ -->
 <div class="modal" id="mPrice" role="dialog" aria-modal="true"><div class="sheet">
@@ -732,8 +759,7 @@ $('#dNew').addEventListener('click',()=>{
   try{if(window.matchMedia('(pointer:fine)').matches)setTimeout(()=>$('#q').focus(),50)}catch(e){}
 });
 $('#dPrint').addEventListener('click',()=>{if(S.lastSale)window.imprimirTicket(S.lastSale,S.config)});
-// La Parte 4 reemplaza esta función con la impresión real del ticket
-window.imprimirTicket=window.imprimirTicket||function(){toast('La impresión del ticket se activa en la Parte 4')};
+// (La impresión del ticket está en la sección TICKET, más abajo)
 
 /* ===================================================================
    LECTOR DE CÓDIGOS: cámara (barras y QR) y lector USB/Bluetooth
@@ -1189,6 +1215,207 @@ admBody().addEventListener('click',e=>{
 admBody().addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList&&e.target.classList.contains('arow')&&e.target.dataset.c){e.preventDefault();admEdit(e.target.dataset.c,false)}});
 
 /* ===================================================================
+   TICKET · impresora térmica Phomemo de 58 mm (384 puntos de ancho)
+   El ticket se dibuja como imagen y se puede: imprimir por Bluetooth,
+   compartir/guardar para la app de Phomemo, o imprimir desde el navegador.
+   =================================================================== */
+const TK_W=384;
+// Code128: anchos de barra/espacio de los símbolos 0 a 105 y del final (106)
+const C128=['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
+function code128Widths(text){
+  const codes=[104]; // inicio, juego B
+  String(text).split('').forEach(ch=>{let c=ch.charCodeAt(0)-32;if(c<0||c>95)c=31;codes.push(c)});
+  let sum=codes[0];for(let i=1;i<codes.length;i++)sum+=codes[i]*i;
+  codes.push(sum%103);codes.push(106);
+  const w=[];codes.forEach(c=>C128[c].split('').forEach(d=>w.push(Number(d))));
+  return w;
+}
+function buildTicket(v,cfg){
+  const W=TK_W,PAD=8,IW=W-PAD*2;
+  const MONO='"DejaVu Sans Mono","Liberation Mono","Courier New",monospace';
+  const mc=document.createElement('canvas').getContext('2d');
+  const ops=[];let y=PAD;
+  const wrap=(t,font)=>{
+    mc.font=font;const out=[];
+    String(t==null?'':t).split('\n').forEach(par=>{
+      let cur='';
+      par.split(/\s+/).filter(Boolean).forEach(w0=>{
+        let word=w0;
+        while(mc.measureText(word).width>IW){ // palabra más ancha que el ticket: se parte
+          let k=word.length;while(k>1&&mc.measureText(word.slice(0,k)).width>IW)k--;
+          if(cur){out.push(cur);cur=''}out.push(word.slice(0,k));word=word.slice(k);
+        }
+        const test=cur?cur+' '+word:word;
+        if(mc.measureText(test).width<=IW)cur=test;else{out.push(cur);cur=word}
+      });
+      out.push(cur);
+    });
+    return out;
+  };
+  const fontOf=(size,o)=>(o&&o.bold?'bold ':'')+size+'px '+(o&&o.sans?'sans-serif':MONO);
+  const text=(t,size,o)=>{
+    o=o||{};const f=fontOf(size,o),lh=Math.round(size*1.3),a=o.align||'left';
+    wrap(t,f).forEach(s=>{ops.push({k:'t',t:s,f:f,a:a,x:a==='center'?W/2:(a==='right'?W-PAD:PAD),y:y+size});y+=lh});
+  };
+  const pair=(l,r,size,o)=>{
+    const f=fontOf(size,o),lh=Math.round(size*1.3);
+    ops.push({k:'t',t:l,f:f,a:'left',x:PAD,y:y+size});ops.push({k:'t',t:r,f:f,a:'right',x:W-PAD,y:y+size});y+=lh;
+  };
+  const rule=dash=>{ops.push({k:'r',y:y+7,dash:dash});y+=16};
+  const fechaTxt=(f,h)=>{const m=String(f||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return (m?m[3]+'/'+m[2]+'/'+m[1]:String(f||''))+' '+String(h||'').slice(0,5)};
+
+  text(cfg.Negocio||'Mi Negocio',28,{bold:1,sans:1,align:'center'});
+  if(cfg.Direccion)text(cfg.Direccion,17,{align:'center'});
+  if(cfg.Telefono)text('Tel. '+cfg.Telefono,17,{align:'center'});
+  rule(true);
+  text('Folio: '+v.folio,24,{bold:1,align:'center'});
+  text(fechaTxt(v.fecha,v.hora),18,{align:'center'});
+  if(v.vendedor)text('Atendió: '+v.vendedor,18,{align:'center'});
+  rule(true);
+  let hayElec=false;
+  (v.items||[]).forEach(it=>{
+    text(String(it.desc||it.codigo)+(it.electrico?' *':''),20,{bold:1});
+    if(it.electrico)hayElec=true;
+    pair(it.qty+' x '+fmt(it.precio),fmt(it.importe),20);
+  });
+  rule(true);
+  pair('TOTAL',fmt(v.total),30,{bold:1});
+  text('Pago: '+v.metodo,20);
+  if(v.metodo==='Efectivo'){pair('Recibido',fmt(v.recibido),20);pair('Cambio',fmt(v.cambio),22,{bold:1})}
+  rule(true);
+  // código de barras del folio (para buscarlo con el escáner al devolver)
+  const widths=code128Widths(v.folio);const modules=widths.reduce((a,b)=>a+b,0);
+  const mw=Math.max(1,Math.min(3,Math.floor((W-PAD*2)/(modules+20))));
+  ops.push({k:'b',y:y+4,h:64,w:widths,mw:mw,mod:modules});y+=64+10;
+  text(v.folio,20,{bold:1,align:'center'});
+  y+=4;
+  if(hayElec)text('* Parte eléctrica: sin cambios ni devoluciones.',16,{align:'center'});
+  if(cfg.Leyenda)text(cfg.Leyenda,16,{align:'center'});
+  text('¡Gracias por su compra!',20,{bold:1,align:'center'});
+  const H=y+PAD+56; // espacio final para poder cortar el papel
+  const c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.fillStyle='#000';x.strokeStyle='#000';x.textBaseline='alphabetic';
+  ops.forEach(o=>{
+    if(o.k==='t'){x.font=o.f;x.textAlign=o.a;x.fillText(o.t,o.x,o.y)}
+    else if(o.k==='r'){x.lineWidth=2;x.setLineDash(o.dash?[5,4]:[]);x.beginPath();x.moveTo(PAD,o.y);x.lineTo(W-PAD,o.y);x.stroke();x.setLineDash([])}
+    else if(o.k==='b'){let px=Math.round((W-o.mod*o.mw)/2);o.w.forEach((wd,i)=>{if(i%2===0)x.fillRect(px,o.y,wd*o.mw,o.h);px+=wd*o.mw})}
+  });
+  return c;
+}
+// Imagen en blanco y negro empaquetada: 1 bit por punto, 48 bytes por fila
+function ticketRaster(c){
+  const w=c.width,h=c.height,d=c.getContext('2d').getImageData(0,0,w,h).data,rb=w>>3,out=new Uint8Array(rb*h);
+  for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++){
+    const i=(yy*w+xx)*4;
+    if(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]<150)out[yy*rb+(xx>>3)]|=0x80>>(xx&7);
+  }
+  return out;
+}
+// Comandos para la Phomemo (protocolo de la serie T02/M02): inicio, imagen por franjas y avance de papel
+function phomemoJob(c){
+  const rb=c.width>>3,h=c.height,r=ticketRaster(c),parts=[];
+  parts.push(Uint8Array.from([0x1b,0x40,0x1b,0x61,0x01,0x1f,0x11,0x02,0x04]));
+  for(let y0=0;y0<h;y0+=255){
+    const n=Math.min(255,h-y0);
+    parts.push(Uint8Array.from([0x1d,0x76,0x30,0x00,rb&255,rb>>8,n&255,n>>8]));
+    parts.push(r.subarray(y0*rb,(y0+n)*rb));
+  }
+  parts.push(Uint8Array.from([0x1b,0x64,0x02,0x1b,0x64,0x02,0x1f,0x11,0x08,0x1f,0x11,0x0e,0x1f,0x11,0x07,0x1f,0x11,0x09]));
+  const len=parts.reduce((a,p)=>a+p.length,0),all=new Uint8Array(len);let o=0;parts.forEach(p=>{all.set(p,o);o+=p.length});
+  return all;
+}
+
+const tk={canvas:null,venta:null,busy:false};
+let btDev=null,btChar=null;
+const BT_SERVICES=['0000ff00-0000-1000-8000-00805f9b34fb','000018f0-0000-1000-8000-00805f9b34fb','0000ae30-0000-1000-8000-00805f9b34fb','e7810a71-73ae-499d-8c15-faa9aef0c3f2','49535343-fe7d-4ae5-8fa9-9fafd205e455'];
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function tkMsg(m,bad){const e=$('#tkMsg');e.textContent=m||'';e.style.color=bad?'var(--danger)':''}
+
+function imprimirTicket(venta,cfg){
+  if(!venta)return;
+  tk.venta=venta;
+  tk.canvas=buildTicket(venta,cfg||S.config||{});
+  $('#tkImg').src=tk.canvas.toDataURL('image/png');
+  tkMsg('');
+  $('#tkBt').hidden=!navigator.bluetooth;
+  openM('#mTicket');
+}
+window.imprimirTicket=imprimirTicket;
+
+async function btConnect(){
+  if(btDev&&btDev.gatt.connected&&btChar)return btChar;
+  if(!btDev){
+    tkMsg('Elige tu impresora en la lista…');
+    btDev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:BT_SERVICES});
+    btDev.addEventListener('gattserverdisconnected',()=>{btChar=null});
+  }
+  tkMsg('Conectando con la impresora…');
+  const server=await btDev.gatt.connect();
+  let pick=null;
+  const services=await server.getPrimaryServices();
+  for(const sv of services){
+    const chs=await sv.getCharacteristics();
+    for(const ch of chs){
+      const p=ch.properties||{};
+      if(p.writeWithoutResponse||p.write){if(!pick||String(ch.uuid).indexOf('0000ff02')===0)pick=ch}
+    }
+  }
+  if(!pick)throw new Error('No encontré por dónde enviar datos a esta impresora. Usa “Compartir / guardar imagen”.');
+  btChar=pick;return pick;
+}
+async function btWrite(ch,bytes,onProgress){
+  let size=100,i=0;
+  const sinResp=!!(ch.properties&&ch.properties.writeValueWithoutResponse!==false&&ch.properties.writeWithoutResponse);
+  while(i<bytes.length){
+    const part=bytes.slice(i,i+size);
+    try{if(sinResp)await ch.writeValueWithoutResponse(part);else await ch.writeValue(part)}
+    catch(e){if(size>20){size=20;continue}throw e}
+    i+=part.length;
+    if(onProgress&&(i%2000<size))onProgress(Math.min(100,Math.round(i*100/bytes.length)));
+    await sleep(12);
+  }
+}
+async function tkBluetooth(){
+  if(tk.busy||!tk.canvas||!navigator.bluetooth)return;
+  tk.busy=true;const btn=$('#tkBt');btn.disabled=true;
+  try{
+    const ch=await btConnect();
+    const job=phomemoJob(tk.canvas);
+    tkMsg('Imprimiendo… 0 %');
+    await btWrite(ch,job,p=>tkMsg('Imprimiendo… '+p+' %'));
+    tkMsg('Enviado a la impresora ✓');
+  }catch(e){
+    const n=e&&e.name;
+    if(n==='NotFoundError')tkMsg('No se eligió ninguna impresora.',true);
+    else if(n==='NetworkError'||n==='InvalidStateError'){btChar=null;tkMsg('Se perdió la conexión con la impresora. Enciéndela, acércala y vuelve a intentar.',true)}
+    else if(n==='SecurityError')tkMsg('El navegador no permitió el Bluetooth. Revisa los permisos.',true);
+    else tkMsg((e&&e.message)||'No se pudo imprimir.',true);
+  }
+  tk.busy=false;btn.disabled=false;
+}
+async function tkShare(){
+  if(!tk.canvas)return;
+  const blob=await new Promise(r=>tk.canvas.toBlob(r,'image/png'));
+  const name='ticket_'+String(tk.venta.folio).replace(/[^A-Za-z0-9_-]/g,'')+'.png';
+  try{
+    const file=new File([blob],name,{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Ticket '+tk.venta.folio});return}
+  }catch(e){if(e&&e.name==='AbortError')return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
+  tkMsg('Imagen guardada. Ábrela con la app de Phomemo para imprimirla.');
+}
+function tkBrowserPrint(){
+  if(!tk.canvas)return;
+  $('#printArea').innerHTML='<img alt="" src="'+tk.canvas.toDataURL('image/png')+'">';
+  setTimeout(()=>{window.print();setTimeout(()=>{$('#printArea').innerHTML=''},1500)},60);
+}
+$('#tkBt').addEventListener('click',tkBluetooth);
+$('#tkShare').addEventListener('click',tkShare);
+$('#tkPrint').addEventListener('click',tkBrowserPrint);
+$('#tkClose').addEventListener('click',()=>closeM('#mTicket'));
+
+/* ===================================================================
    GENERAL
    =================================================================== */
 function renderAll(){renderGrid();renderCart()}
@@ -1202,7 +1429,7 @@ document.addEventListener('keydown',e=>{
   if(S.admOpen)admClose();
 });
 // Puntos de enganche para las partes siguientes (administración, ticket, devoluciones...)
-window.POS={S:S,api:api,toast:toast,esc:esc,fmt:fmt,norm:norm,openM:openM,closeM:closeM,loadCatalog:loadCatalog,renderAll:renderAll,fotoUrl:fotoUrl,handleCode:handleCode};
+window.POS={S:S,api:api,toast:toast,esc:esc,fmt:fmt,norm:norm,openM:openM,closeM:closeM,loadCatalog:loadCatalog,renderAll:renderAll,fotoUrl:fotoUrl,handleCode:handleCode,code128Widths:code128Widths,buildTicket:buildTicket,ticketRaster:ticketRaster,phomemoJob:phomemoJob};
 
 /* ===================================================================
    ARRANQUE
