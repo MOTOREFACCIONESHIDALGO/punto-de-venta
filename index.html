@@ -166,6 +166,20 @@ main{padding:14px 16px 120px}
 .tkwrap img{width:100%;max-width:384px;display:block;margin:0 auto}
 .tkbtns{display:grid;gap:8px}
 #printArea{display:none}
+textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);width:100%;min-height:70px;resize:vertical;font:inherit;color:inherit}
+.dline{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
+.dline input[type=checkbox]{width:24px;height:24px;flex:0 0 24px;margin-top:2px}
+.dline .dl-b{min-width:0;flex:1;overflow-wrap:anywhere}
+.dline .dl-t{font-weight:600}
+.dline .sub{color:var(--muted);font-size:12px;margin-top:2px}
+.dline.off{opacity:.55}
+.dhead{background:var(--soft);border-radius:12px;padding:12px;margin:10px 0;overflow-wrap:anywhere}
+.dhead .f{font-size:22px;font-weight:800}
+.dsum{font-weight:700;margin:10px 0}
+.ncok{color:var(--ok)}
+.fr{display:flex;gap:8px;align-items:stretch}
+.fr input{flex:1;min-width:0}
+.fr .iconbtn{flex:0 0 48px}
 @media print{
   @page{size:58mm auto;margin:2mm}
   html,body{background:#fff!important}
@@ -206,6 +220,7 @@ main{padding:14px 16px 120px}
     <h1 id="bizTitle">Punto de Venta</h1>
     <span class="chip" id="whoami"></span>
     <button class="chip" id="btnRefresh" title="Actualizar catálogo" aria-label="Actualizar catálogo">↻</button>
+    <button class="chip" id="btnDev">Devoluciones</button>
     <button class="chip" id="btnAdmin" hidden>Administración</button>
     <button class="chip" id="btnLogout">Salir</button>
   </header>
@@ -263,6 +278,13 @@ main{padding:14px 16px 120px}
     <button data-m="Tarjeta">Tarjeta</button>
     <button data-m="Transferencia">Transfer.</button>
   </div>
+  <div style="margin:8px 0">
+    <button class="link" id="ncToggle" type="button">Pagar con nota de crédito</button>
+    <div id="ncForm" hidden>
+      <div class="fr"><input id="ncFolio" placeholder="Folio de la nota (NC-00001)" autocapitalize="characters" autocomplete="off" aria-label="Folio de la nota de crédito"><button class="iconbtn" id="ncScan" type="button" aria-label="Escanear nota">📷</button><button class="btn sec" id="ncApply" type="button" style="width:auto;flex:0 0 auto">Aplicar</button></div>
+      <div class="hint" id="ncInfo" role="status"></div>
+    </div>
+  </div>
   <div id="cashBox">
     <label for="recv">Efectivo recibido</label>
     <input id="recv" type="number" inputmode="decimal" min="0" step="0.01">
@@ -288,9 +310,42 @@ main{padding:14px 16px 120px}
   </div>
 </div></div>
 
+<!-- ============ MODAL: DEVOLUCIONES Y CANCELACIONES ============ -->
+<div class="modal" id="mDev" role="dialog" aria-modal="true"><div class="sheet" style="max-width:520px">
+  <h2>Devoluciones y cancelaciones</h2>
+  <div class="hint">Escribe o escanea el folio del ticket. Máximo 2 días hábiles. No se devuelve efectivo: se emite una nota de crédito de 30 días.</div>
+  <div class="fr"><input id="devFolio" placeholder="Folio del ticket (B-00001)" autocapitalize="characters" autocomplete="off" aria-label="Folio del ticket"><button class="iconbtn" id="devScan" type="button" aria-label="Escanear folio">📷</button></div>
+  <button class="btn" id="devFind" type="button" style="margin-top:8px">Buscar venta</button>
+  <div class="err" id="devErr" role="alert"></div>
+  <div id="devSale" hidden>
+    <div class="dhead" id="devHead"></div>
+    <div id="devForm">
+      <div class="hint">Marca las piezas que regresa el cliente:</div>
+      <div id="devLines"></div>
+      <div class="dsum" id="devSum"></div>
+      <label for="devTipo">Tipo de devolución</label>
+      <select id="devTipo"></select>
+      <label for="devMotivo" style="display:block;margin-top:8px">Motivo (obligatorio)</label>
+      <textarea id="devMotivo" placeholder="Describe qué pasó"></textarea>
+      <button class="btn" id="devOk" type="button" style="margin-top:10px" disabled>Registrar devolución</button>
+    </div>
+    <button class="btn sec" id="devReprint" type="button" style="margin-top:8px">Reimprimir ticket</button>
+  </div>
+  <div id="devResult" hidden>
+    <div style="font-size:40px;text-align:center">✅</div>
+    <div id="devResText" style="text-align:center;margin:6px 0"></div>
+    <div class="tkbtns">
+      <button class="btn" id="devPrintNota" type="button">Imprimir nota de crédito</button>
+      <button class="btn sec" id="devPrintTk" type="button">Imprimir ticket corregido</button>
+      <button class="btn sec" id="devAgain" type="button">Otra devolución</button>
+    </div>
+  </div>
+  <div class="row" style="margin-top:12px"><button class="btn sec" id="devClose" type="button">Cerrar</button></div>
+</div></div>
+
 <!-- ============ MODAL: TICKET (vista previa e impresión) ============ -->
 <div class="modal" id="mTicket" role="dialog" aria-modal="true"><div class="sheet" style="max-width:420px">
-  <h2>Ticket</h2>
+  <h2 id="tkTitle">Ticket</h2>
   <div class="tkwrap"><img id="tkImg" alt="Vista previa del ticket"></div>
   <div class="hint" id="tkMsg" role="status"></div>
   <div class="tkbtns">
@@ -434,12 +489,13 @@ function beep(){try{const A=window.AudioContext||window.webkitAudioContext;const
 function openM(id){$(id).classList.add('on')}
 function closeM(id){$(id).classList.remove('on')}
 const modalOpen=()=>!!document.querySelector('.modal.on');
+const fdmy=s=>{const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[3]+'/'+m[2]+'/'+m[1]:String(s||'')};
 
 /* ===================================================================
    ESTADO
    =================================================================== */
 const S={url:'',token:'',user:null,config:{},prods:[],byCode:{},cat:'',q:'',cart:[],pay:'Efectivo',
-  auth:null,authAt:0,busy:false,fichaCode:null,priceCode:null,lastSale:null};
+  auth:null,authAt:0,busy:false,fichaCode:null,priceCode:null,lastSale:null,nc:null};
 const AUTH_MS=170000; // el servidor la da por 180 s; aquí un margen
 const MAX_SHOW=200;
 
@@ -697,24 +753,52 @@ $('#prCancel').addEventListener('click',()=>closeM('#mPrice'));
 /* ===================================================================
    COBRO
    =================================================================== */
+function payDue(){const t=Math.round(cartTotal()*100)/100;return S.nc?Math.max(0,Math.round((t-S.nc.aplicado)*100)/100):t}
+function buildQuick(){
+  const t=payDue();
+  const opts=[t];[50,100,200,500,1000].forEach(n=>{if(n>=t&&opts.indexOf(n)<0)opts.push(n)});
+  $('#quick').innerHTML=opts.slice(0,5).map((n,i)=>'<button data-v="'+n+'">'+(i===0?'Exacto':'$'+n)+'</button>').join('');
+}
 function openPay(){
   if(!S.cart.length)return;
-  const t=cartTotal();$('#payTotal').textContent=fmt(t);
+  S.nc=null;$('#ncForm').hidden=true;$('#ncFolio').value='';$('#ncInfo').textContent='';
+  $('#payTotal').textContent=fmt(cartTotal());
   S.pay='Efectivo';$$('#payMethods button').forEach(b=>b.classList.toggle('on',b.dataset.m==='Efectivo'));
-  $('#recv').value='';
-  const opts=[Math.round(t*100)/100];[50,100,200,500,1000].forEach(n=>{if(n>=t&&opts.indexOf(n)<0)opts.push(n)});
-  $('#quick').innerHTML=opts.slice(0,5).map((n,i)=>'<button data-v="'+n+'">'+(i===0?'Exacto':'$'+n)+'</button>').join('');
+  $('#recv').value='';buildQuick();
   updatePay();openM('#mPay');setTimeout(()=>$('#recv').focus(),50);
 }
 function updatePay(){
-  const t=cartTotal(),cash=S.pay==='Efectivo';
-  $('#cashBox').hidden=!cash;
+  const t=payDue(),full=t<=0.004,cash=S.pay==='Efectivo';
+  $('#payMethods').style.display=full?'none':'';
+  $('#cashBox').hidden=full||!cash;
   const out=$('#changeOut');const r=parseFloat($('#recv').value);
+  if(full){$('#payOk').disabled=false;return}
   if(!cash){$('#payOk').disabled=false;return}
   if(isNaN(r)){out.textContent='';$('#payOk').disabled=true}
   else if(r<t-0.005){out.style.color='var(--danger)';out.textContent='Faltan '+fmt(t-r);$('#payOk').disabled=true}
   else{out.style.color='var(--ok)';out.textContent='Cambio: '+fmt(r-t);$('#payOk').disabled=false}
 }
+function ncMsg(t,bad){const e=$('#ncInfo');e.textContent=t;e.style.color=bad?'var(--danger)':'var(--ok)'}
+async function ncApply(){
+  const f=$('#ncFolio').value.trim().toUpperCase();
+  if(!f){ncMsg('Escribe o escanea el folio de la nota.',true);return}
+  const b=$('#ncApply');b.disabled=true;
+  try{
+    const j=await api('creditNote',{folio:f});const n=j.nota;const t=Math.round(cartTotal()*100)/100;
+    if(n.estado==='VENCIDA'){S.nc=null;ncMsg('Esa nota venció el '+fdmy(n.vence)+'.',true)}
+    else if(n.estado==='USADA'){S.nc=null;ncMsg('Esa nota ya fue usada por completo.',true)}
+    else{
+      S.nc={folio:n.folio,saldo:n.saldo,vence:n.vence,aplicado:Math.min(n.saldo,t)};
+      const resto=payDue();
+      ncMsg(n.folio+' · saldo '+fmt(n.saldo)+' · vence '+fdmy(n.vence)+'. Se aplican '+fmt(S.nc.aplicado)+(resto>0.004?'; faltan por pagar '+fmt(resto)+'.':'; la venta queda cubierta.'+(n.saldo>t?' Quedan '+fmt(n.saldo-t)+' en la nota.':'')))
+    }
+  }catch(e){S.nc=null;if(e.code!=='SESION')ncMsg(e.message,true)}
+  b.disabled=false;$('#recv').value='';buildQuick();updatePay();
+}
+$('#ncToggle').addEventListener('click',()=>{const f=$('#ncForm');f.hidden=!f.hidden;if(!f.hidden)setTimeout(()=>$('#ncFolio').focus(),50)});
+$('#ncApply').addEventListener('click',ncApply);
+$('#ncFolio').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();ncApply()}});
+$('#ncScan').addEventListener('click',()=>openScanner(code=>{$('#ncFolio').value=String(code).trim().toUpperCase();ncApply()}));
 $('#checkout').addEventListener('click',openPay);
 $('#payMethods').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.pay=b.dataset.m;$$('#payMethods button').forEach(x=>x.classList.toggle('on',x===b));updatePay()});
 $('#recv').addEventListener('input',updatePay);
@@ -724,9 +808,9 @@ $('#payOk').addEventListener('click',confirmarVenta);
 
 async function confirmarVenta(){
   if(S.busy||!S.cart.length)return;
-  const total=Math.round(cartTotal()*100)/100,cash=S.pay==='Efectivo';
-  let rec=total;
-  if(cash){rec=parseFloat($('#recv').value);if(isNaN(rec)||rec<total-0.005)return}
+  const total=Math.round(cartTotal()*100)/100,due=payDue(),cash=S.pay==='Efectivo'&&due>0.004;
+  let rec=due;
+  if(cash){rec=parseFloat($('#recv').value);if(isNaN(rec)||rec<due-0.005)return}
   const items=S.cart.map(l=>{const o={codigo:l.codigo,qty:l.qty};if(l.precio!=null)o.precio=l.precio;return o});
   const custom=S.cart.some(l=>l.precio!=null);
   let auth;
@@ -736,13 +820,13 @@ async function confirmarVenta(){
   }
   S.busy=true;const btn=$('#payOk');btn.disabled=true;btn.textContent='Guardando…';
   try{
-    const j=await api('saveSale',{metodo:S.pay,recibido:rec,items:items,auth:auth});
+    const j=await api('saveSale',{metodo:S.pay,recibido:rec,items:items,auth:auth,notaFolio:S.nc?S.nc.folio:''});
     const v=j.venta;S.lastSale=v;
     v.items.forEach(it=>{const p=getP(it.codigo);if(p)p.existencia=Math.max(0,p.existencia-it.qty)});
-    S.cart=[];S.auth=null;
+    S.cart=[];S.auth=null;S.nc=null;
     closeM('#mPay');$('#cart').classList.remove('open');
     $('#dFolio').textContent=v.folio;
-    $('#dInfo').textContent=fmt(v.total)+' · '+v.metodo;
+    $('#dInfo').textContent=fmt(v.total)+' · '+v.metodo+(v.nota?' · nota '+v.nota.folio+' −'+fmt(v.nota.aplicado)+(v.nota.saldo>0?' (quedan '+fmt(v.nota.saldo)+')':''):'');
     $('#dChange').textContent=v.metodo==='Efectivo'?'Cambio: '+fmt(v.cambio):'';
     openM('#mDone');renderAll();
     loadCatalog().then(renderAll).catch(()=>{});
@@ -766,7 +850,7 @@ $('#dPrint').addEventListener('click',()=>{if(S.lastSale)window.imprimirTicket(S
    =================================================================== */
 const WANT=['qr_code','code_128','code_39','code_93','ean_13','ean_8','upc_a','upc_e','itf','codabar','data_matrix'];
 const H5URLS=['https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js','https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'];
-const scan={stream:null,timer:null,h5:null,last:'',lastT:0,open:false};
+const scan={stream:null,timer:null,h5:null,last:'',lastT:0,open:false,cb:null};
 function loadScript(i){
   return new Promise((res,rej)=>{
     if(window.Html5Qrcode)return res();
@@ -790,7 +874,8 @@ function camError(e){
   if(n==='NotFoundError'||n==='OverconstrainedError')return 'No se encontró una cámara en este aparato.';
   return (e&&e.message)||'No se pudo iniciar la cámara.';
 }
-async function openScanner(){
+async function openScanner(cb){
+  scan.cb=typeof cb==='function'?cb:null;
   openM('#mScan');scan.open=true;scan.last='';
   const msg=$('#scanMsg');msg.style.color='';msg.textContent='Iniciando cámara…';
   $('#vbox').hidden=false;$('#qrbox').hidden=true;
@@ -826,18 +911,19 @@ function onScan(code){
   scan.lastT=now;
   if(code===scan.last&&gap<1200)return;
   scan.last=code;
+  if(scan.cb){const cb=scan.cb;beep();closeScanner();cb(code);return}
   const r=handleCode(code);
   const msg=$('#scanMsg');msg.style.color=r.ok?'var(--ok)':'var(--danger)';msg.textContent=r.msg;
   if(r.ok)beep();
 }
 function closeScanner(){
-  scan.open=false;clearInterval(scan.timer);scan.timer=null;
+  scan.open=false;scan.cb=null;clearInterval(scan.timer);scan.timer=null;
   if(scan.stream){scan.stream.getTracks().forEach(t=>t.stop());scan.stream=null}
   const v=$('#vid');try{v.pause();v.srcObject=null}catch(e){}
   if(scan.h5){const h=scan.h5;scan.h5=null;try{h.stop().then(()=>{try{h.clear()}catch(e){}}).catch(()=>{})}catch(e){}}
   closeM('#mScan');
 }
-$('#btnScan').addEventListener('click',openScanner);
+$('#btnScan').addEventListener('click',()=>openScanner());
 $('#scanClose').addEventListener('click',closeScanner);
 
 // Lector físico (USB/Bluetooth): teclea muy rápido y termina con Enter. Funciona fuera de los campos de texto.
@@ -1230,7 +1316,7 @@ function code128Widths(text){
   const w=[];codes.forEach(c=>C128[c].split('').forEach(d=>w.push(Number(d))));
   return w;
 }
-function buildTicket(v,cfg){
+function ticketKit(){
   const W=TK_W,PAD=8,IW=W-PAD*2;
   const MONO='"DejaVu Sans Mono","Liberation Mono","Courier New",monospace';
   const mc=document.createElement('canvas').getContext('2d');
@@ -1262,45 +1348,80 @@ function buildTicket(v,cfg){
     ops.push({k:'t',t:l,f:f,a:'left',x:PAD,y:y+size});ops.push({k:'t',t:r,f:f,a:'right',x:W-PAD,y:y+size});y+=lh;
   };
   const rule=dash=>{ops.push({k:'r',y:y+7,dash:dash});y+=16};
-  const fechaTxt=(f,h)=>{const m=String(f||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return (m?m[3]+'/'+m[2]+'/'+m[1]:String(f||''))+' '+String(h||'').slice(0,5)};
-
-  text(cfg.Negocio||'Mi Negocio',28,{bold:1,sans:1,align:'center'});
-  if(cfg.Direccion)text(cfg.Direccion,17,{align:'center'});
-  if(cfg.Telefono)text('Tel. '+cfg.Telefono,17,{align:'center'});
-  rule(true);
-  text('Folio: '+v.folio,24,{bold:1,align:'center'});
-  text(fechaTxt(v.fecha,v.hora),18,{align:'center'});
-  if(v.vendedor)text('Atendió: '+v.vendedor,18,{align:'center'});
-  rule(true);
+  const code=f=>{ // código de barras (para buscarlo con el escáner)
+    const widths=code128Widths(f);const modules=widths.reduce((a,b)=>a+b,0);
+    const mw=Math.max(1,Math.min(3,Math.floor((W-PAD*2)/(modules+20))));
+    ops.push({k:'b',y:y+4,h:64,w:widths,mw:mw,mod:modules});y+=64+10;
+    text(f,20,{bold:1,align:'center'});y+=4;
+  };
+  const finish=()=>{
+    const H=y+PAD+56; // espacio final para poder cortar el papel
+    const c=document.createElement('canvas');c.width=W;c.height=H;
+    const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.fillStyle='#000';x.strokeStyle='#000';x.textBaseline='alphabetic';
+    ops.forEach(o=>{
+      if(o.k==='t'){x.font=o.f;x.textAlign=o.a;x.fillText(o.t,o.x,o.y)}
+      else if(o.k==='r'){x.lineWidth=2;x.setLineDash(o.dash?[5,4]:[]);x.beginPath();x.moveTo(PAD,o.y);x.lineTo(W-PAD,o.y);x.stroke();x.setLineDash([])}
+      else if(o.k==='b'){let px=Math.round((W-o.mod*o.mw)/2);o.w.forEach((wd,i)=>{if(i%2===0)x.fillRect(px,o.y,wd*o.mw,o.h);px+=wd*o.mw})}
+    });
+    return c;
+  };
+  return {text:text,pair:pair,rule:rule,code:code,finish:finish};
+}
+function ticketHead(k,cfg){
+  k.text(cfg.Negocio||'Mi Negocio',28,{bold:1,sans:1,align:'center'});
+  if(cfg.Direccion)k.text(cfg.Direccion,17,{align:'center'});
+  if(cfg.Telefono)k.text('Tel. '+cfg.Telefono,17,{align:'center'});
+  k.rule(true);
+}
+function buildTicket(v,cfg){
+  const k=ticketKit();cfg=cfg||{};
+  ticketHead(k,cfg);
+  k.text('Folio: '+v.folio,24,{bold:1,align:'center'});
+  if(v.corregido)k.text('TICKET CORREGIDO',20,{bold:1,align:'center'});
+  k.text(fdmy(v.fecha)+' '+String(v.hora||'').slice(0,5),18,{align:'center'});
+  if(v.vendedor)k.text('Atendió: '+v.vendedor,18,{align:'center'});
+  k.rule(true);
   let hayElec=false;
   (v.items||[]).forEach(it=>{
-    text(String(it.desc||it.codigo)+(it.electrico?' *':''),20,{bold:1});
+    k.text(String(it.desc||it.codigo)+(it.electrico?' *':''),20,{bold:1});
     if(it.electrico)hayElec=true;
-    pair(it.qty+' x '+fmt(it.precio),fmt(it.importe),20);
+    k.pair(it.qty+' x '+fmt(it.precio),fmt(it.importe),20);
   });
-  rule(true);
-  pair('TOTAL',fmt(v.total),30,{bold:1});
-  text('Pago: '+v.metodo,20);
-  if(v.metodo==='Efectivo'){pair('Recibido',fmt(v.recibido),20);pair('Cambio',fmt(v.cambio),22,{bold:1})}
-  rule(true);
-  // código de barras del folio (para buscarlo con el escáner al devolver)
-  const widths=code128Widths(v.folio);const modules=widths.reduce((a,b)=>a+b,0);
-  const mw=Math.max(1,Math.min(3,Math.floor((W-PAD*2)/(modules+20))));
-  ops.push({k:'b',y:y+4,h:64,w:widths,mw:mw,mod:modules});y+=64+10;
-  text(v.folio,20,{bold:1,align:'center'});
-  y+=4;
-  if(hayElec)text('* Parte eléctrica: sin cambios ni devoluciones.',16,{align:'center'});
-  if(cfg.Leyenda)text(cfg.Leyenda,16,{align:'center'});
-  text('¡Gracias por su compra!',20,{bold:1,align:'center'});
-  const H=y+PAD+56; // espacio final para poder cortar el papel
-  const c=document.createElement('canvas');c.width=W;c.height=H;
-  const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.fillStyle='#000';x.strokeStyle='#000';x.textBaseline='alphabetic';
-  ops.forEach(o=>{
-    if(o.k==='t'){x.font=o.f;x.textAlign=o.a;x.fillText(o.t,o.x,o.y)}
-    else if(o.k==='r'){x.lineWidth=2;x.setLineDash(o.dash?[5,4]:[]);x.beginPath();x.moveTo(PAD,o.y);x.lineTo(W-PAD,o.y);x.stroke();x.setLineDash([])}
-    else if(o.k==='b'){let px=Math.round((W-o.mod*o.mw)/2);o.w.forEach((wd,i)=>{if(i%2===0)x.fillRect(px,o.y,wd*o.mw,o.h);px+=wd*o.mw})}
-  });
-  return c;
+  k.rule(true);
+  k.pair('TOTAL',fmt(v.total),30,{bold:1});
+  if(v.corregido){
+    k.text('Pago original: '+v.metodo+(v.notaPagoFolio?' (nota '+v.notaPagoFolio+')':''),18);
+  }else{
+    if(v.nota){
+      k.pair('Nota '+v.nota.folio,'-'+fmt(v.nota.aplicado),18);
+      if(v.resto>0.004)k.pair('Por pagar',fmt(v.resto),20,{bold:1});
+    }
+    k.text('Pago: '+v.metodo,20);
+    if(v.metodo==='Efectivo'){k.pair('Recibido',fmt(v.recibido),20);k.pair('Cambio',fmt(v.cambio),22,{bold:1})}
+    if(v.nota)k.text('Saldo de la nota: '+fmt(v.nota.saldo)+(v.nota.saldo>0.004?' · vence '+fdmy(v.nota.vence):''),16);
+  }
+  k.rule(true);
+  k.code(v.folio);
+  if(hayElec)k.text('* Parte eléctrica: sin cambios ni devoluciones.',16,{align:'center'});
+  if(cfg.Leyenda)k.text(cfg.Leyenda,16,{align:'center'});
+  k.text('¡Gracias por su compra!',20,{bold:1,align:'center'});
+  return k.finish();
+}
+function buildNota(n,cfg){
+  const k=ticketKit();cfg=cfg||{};
+  ticketHead(k,cfg);
+  k.text('NOTA DE CRÉDITO',26,{bold:1,align:'center'});
+  k.text('Folio: '+n.folio,22,{bold:1,align:'center'});
+  k.text('Emitida: '+fdmy(n.fecha),18,{align:'center'});
+  if(n.folioVenta)k.text('Por la venta: '+n.folioVenta,18,{align:'center'});
+  k.rule(true);
+  k.pair('IMPORTE',fmt(n.monto),30,{bold:1});
+  if(n.saldo!=null&&n.saldo<n.monto-0.004)k.pair('Saldo',fmt(n.saldo),22);
+  k.text('Vence: '+fdmy(n.vence),24,{bold:1,align:'center'});
+  k.rule(true);
+  k.code(n.folio);
+  k.text('Úsala como forma de pago presentando este ticket. No se cambia por efectivo. Si queda saldo, conserva la misma fecha de vencimiento.',16,{align:'center'});
+  return k.finish();
 }
 // Imagen en blanco y negro empaquetada: 1 bit por punto, 48 bytes por fila
 function ticketRaster(c){
@@ -1325,21 +1446,30 @@ function phomemoJob(c){
   return all;
 }
 
-const tk={canvas:null,venta:null,busy:false};
+const tk={canvas:null,name:'ticket',busy:false};
 let btDev=null,btChar=null;
 const BT_SERVICES=['0000ff00-0000-1000-8000-00805f9b34fb','000018f0-0000-1000-8000-00805f9b34fb','0000ae30-0000-1000-8000-00805f9b34fb','e7810a71-73ae-499d-8c15-faa9aef0c3f2','49535343-fe7d-4ae5-8fa9-9fafd205e455'];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function tkMsg(m,bad){const e=$('#tkMsg');e.textContent=m||'';e.style.color=bad?'var(--danger)':''}
 
-function imprimirTicket(venta,cfg){
-  if(!venta)return;
-  tk.venta=venta;
-  tk.canvas=buildTicket(venta,cfg||S.config||{});
-  $('#tkImg').src=tk.canvas.toDataURL('image/png');
+const safeName=t=>String(t).replace(/[^A-Za-z0-9_-]/g,'');
+function mostrarTicket(canvas,name,title){
+  tk.canvas=canvas;tk.name=name;
+  $('#tkTitle').textContent=title;
+  $('#tkImg').src=canvas.toDataURL('image/png');
   tkMsg('');
   $('#tkBt').hidden=!navigator.bluetooth;
   openM('#mTicket');
 }
+function imprimirTicket(venta,cfg){
+  if(!venta)return;
+  mostrarTicket(buildTicket(venta,cfg||S.config||{}),'ticket_'+safeName(venta.folio),venta.corregido?'Ticket corregido':'Ticket');
+}
+function imprimirNota(nota,cfg){
+  if(!nota)return;
+  mostrarTicket(buildNota(nota,cfg||S.config||{}),'nota_credito_'+safeName(nota.folio),'Nota de crédito');
+}
+window.imprimirNota=imprimirNota;
 window.imprimirTicket=imprimirTicket;
 
 async function btConnect(){
@@ -1396,10 +1526,10 @@ async function tkBluetooth(){
 async function tkShare(){
   if(!tk.canvas)return;
   const blob=await new Promise(r=>tk.canvas.toBlob(r,'image/png'));
-  const name='ticket_'+String(tk.venta.folio).replace(/[^A-Za-z0-9_-]/g,'')+'.png';
+  const name=tk.name+'.png';
   try{
     const file=new File([blob],name,{type:'image/png'});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Ticket '+tk.venta.folio});return}
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:tk.name});return}
   }catch(e){if(e&&e.name==='AbortError')return}
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
@@ -1416,6 +1546,110 @@ $('#tkPrint').addEventListener('click',tkBrowserPrint);
 $('#tkClose').addEventListener('click',()=>closeM('#mTicket'));
 
 /* ===================================================================
+   DEVOLUCIONES Y CANCELACIONES (el servidor valida plazos, eléctricos y existencias)
+   =================================================================== */
+const D={sale:null,ticket:null,sel:{},nota:null,busy:false};
+function devReset(){
+  D.sale=null;D.ticket=null;D.sel={};D.nota=null;
+  $('#devSale').hidden=true;$('#devResult').hidden=true;$('#devErr').textContent='';
+  $('#devMotivo').value='';$('#devTipo').innerHTML='';
+}
+function openDev(){devReset();$('#devFolio').value='';openM('#mDev');setTimeout(()=>{try{if(window.matchMedia('(pointer:fine)').matches)$('#devFolio').focus()}catch(e){}},50)}
+async function devFind(folio){
+  const f=String(folio==null?$('#devFolio').value:folio).trim().toUpperCase();
+  $('#devFolio').value=f;$('#devErr').textContent='';$('#devResult').hidden=true;
+  if(!f){$('#devErr').textContent='Escribe o escanea el folio del ticket.';return}
+  const b=$('#devFind');b.disabled=true;
+  try{
+    const j=await api('findSale',{folio:f});
+    D.sale=j.venta;D.ticket=j.ticket;D.sel={};
+    $('#devTipo').innerHTML='<option value="">Elige el tipo…</option>'+j.tipos.map(t=>'<option>'+esc(t)+'</option>').join('');
+    $('#devMotivo').value='';
+    renderDev();
+  }catch(e){D.sale=null;$('#devSale').hidden=true;if(e.code!=='SESION')$('#devErr').textContent=e.message}
+  b.disabled=false;
+}
+function devSum(){return Math.round(D.sale.lineas.reduce((a,l)=>a+(D.sel[l.n]||0)*l.precio,0)*100)/100}
+function renderDevLines(){
+  const v=D.sale;
+  $('#devLines').innerHTML=v.lineas.map(l=>{
+    const on=D.sel[l.n]!=null,dis=l.disponible<1;
+    return '<div class="dline'+(dis?' off':'')+'"><input type="checkbox" data-n="'+l.n+'"'+(on?' checked':'')+(dis?' disabled':'')+' aria-label="Devolver '+esc(l.desc)+'">'+
+      '<div class="dl-b"><div class="dl-t">'+esc(l.desc)+'</div>'+
+      '<div class="sub">'+esc(l.codigo)+' · '+l.qty+' × '+fmt(l.precio)+(l.devuelta?' · ya devueltas: '+l.devuelta:'')+'</div>'+
+      '<div>'+(l.electrico?'<span class="tag el">Eléctrico</span> ':'')+(!dis&&l.requiereAdmin?'<span class="tag red">Requiere administrador</span>':'')+(dis?'<span class="tag">Ya devuelta</span>':'')+'</div>'+
+      (on&&l.disponible>1?'<div class="qty" style="margin-top:6px"><button type="button" data-n="'+l.n+'" data-d="-1" aria-label="Menos">−</button><span>'+D.sel[l.n]+'</span><button type="button" data-n="'+l.n+'" data-d="1" aria-label="Más">+</button><span class="hint" style="min-width:0">de '+l.disponible+'</span></div>':'')+
+      '</div></div>';
+  }).join('');
+  const m=devSum();
+  $('#devSum').textContent=m>0?'Se emitirá una nota de crédito por '+fmt(m):'';
+  $('#devOk').disabled=!Object.keys(D.sel).length;
+}
+function renderDev(){
+  const v=D.sale;
+  $('#devSale').hidden=false;$('#devResult').hidden=true;
+  let plazo;
+  if(v.cancelada)plazo='<b style="color:var(--danger)">Esta venta ya está cancelada por completo.</b>';
+  else if(v.vencida)plazo='<b style="color:var(--danger)">Pasaron los 2 días hábiles (venció el '+fdmy(v.vence)+').</b> Solo un administrador puede aprobarla.';
+  else plazo='Plazo para devolver: hasta el '+fdmy(v.vence);
+  $('#devHead').innerHTML='<div class="f">'+esc(v.folio)+'</div><div>'+fdmy(v.fecha)+' '+esc(v.hora)+' · '+esc(v.vendedor)+'</div>'+
+    '<div>Total '+fmt(v.total)+' · '+esc(v.metodo)+(v.notaPagoFolio?' (nota '+esc(v.notaPagoFolio)+')':'')+'</div><div class="hint">'+plazo+'</div>';
+  $('#devForm').hidden=!!v.cancelada;
+  $('#devReprint').hidden=!D.ticket;
+  $('#devReprint').textContent=D.ticket&&D.ticket.corregido?'Reimprimir ticket corregido':'Reimprimir ticket';
+  renderDevLines();
+}
+$('#devLines').addEventListener('change',e=>{
+  const c=e.target.closest('input[type=checkbox]');if(!c)return;
+  const n=c.dataset.n;if(c.checked)D.sel[n]=1;else delete D.sel[n];renderDevLines();
+});
+$('#devLines').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-d]');if(!b)return;
+  const l=D.sale.lineas[Number(b.dataset.n)];const q=(D.sel[l.n]||1)+Number(b.dataset.d);
+  D.sel[l.n]=Math.max(1,Math.min(l.disponible,q));renderDevLines();
+});
+async function devSubmit(){
+  if(D.busy||!D.sale)return;
+  const err=$('#devErr');err.textContent='';
+  const items=Object.keys(D.sel).map(n=>({n:Number(n),qty:D.sel[n]}));
+  const tipo=$('#devTipo').value,motivo=$('#devMotivo').value.trim();
+  if(!items.length){err.textContent='Marca al menos una pieza.';return}
+  if(!tipo){err.textContent='Elige el tipo de devolución.';$('#devTipo').focus();return}
+  if(motivo.length<3){err.textContent='Escribe el motivo de la devolución.';$('#devMotivo').focus();return}
+  D.busy=true;const btn=$('#devOk');btn.disabled=true;btn.textContent='Guardando…';
+  const payload={folio:D.sale.folio,items:items,tipo:tipo,motivo:motivo};
+  try{
+    let j;
+    try{j=await api('returnItems',payload)}
+    catch(e){
+      if(e.code!=='AUTORIZAR')throw e;
+      if(!authValid()){const ok=await askAdmin();if(!ok){D.busy=false;btn.textContent='Registrar devolución';btn.disabled=false;return}}
+      try{j=await api('returnItems',Object.assign({auth:S.auth},payload))}catch(e2){if(e2.code==='AUTORIZAR')S.auth=null;throw e2}
+    }
+    D.nota=j.nota;D.ticket=j.ticket;
+    $('#devSale').hidden=true;$('#devResult').hidden=false;
+    $('#devResText').innerHTML='<b>Devolución '+esc(j.folioDev)+' registrada</b>'+(j.cancelada?'<br>La venta quedó <b>cancelada</b>.':'')+
+      '<br>Las piezas regresaron al inventario.'+(j.nota?'<br>Nota de crédito <b>'+esc(j.nota.folio)+'</b> por <b>'+fmt(j.nota.monto)+'</b>, vence el '+fdmy(j.nota.vence)+'.':'<br>No hubo importe que abonar.')+
+      '<br><span class="hint">No se devuelve efectivo.</span>';
+    $('#devPrintNota').hidden=!j.nota;$('#devPrintTk').hidden=!j.ticket;
+    loadCatalog().then(renderAll).catch(()=>{});
+  }catch(e){
+    if(e&&e.code!=='SESION'){err.textContent=e.message||'No se pudo registrar';if(/autoriza/i.test(e.message||''))S.auth=null}
+  }
+  D.busy=false;btn.textContent='Registrar devolución';btn.disabled=!Object.keys(D.sel).length;
+}
+$('#btnDev').addEventListener('click',openDev);
+$('#devClose').addEventListener('click',()=>closeM('#mDev'));
+$('#devFind').addEventListener('click',()=>devFind());
+$('#devFolio').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();devFind()}});
+$('#devScan').addEventListener('click',()=>openScanner(code=>devFind(code)));
+$('#devOk').addEventListener('click',devSubmit);
+$('#devReprint').addEventListener('click',()=>{if(D.ticket)imprimirTicket(D.ticket,S.config)});
+$('#devPrintTk').addEventListener('click',()=>{if(D.ticket)imprimirTicket(D.ticket,S.config)});
+$('#devPrintNota').addEventListener('click',()=>{if(D.nota)imprimirNota(D.nota,S.config)});
+$('#devAgain').addEventListener('click',()=>{devReset();$('#devFolio').value='';$('#devFolio').focus()});
+
+/* ===================================================================
    GENERAL
    =================================================================== */
 function renderAll(){renderGrid();renderCart()}
@@ -1429,7 +1663,7 @@ document.addEventListener('keydown',e=>{
   if(S.admOpen)admClose();
 });
 // Puntos de enganche para las partes siguientes (administración, ticket, devoluciones...)
-window.POS={S:S,api:api,toast:toast,esc:esc,fmt:fmt,norm:norm,openM:openM,closeM:closeM,loadCatalog:loadCatalog,renderAll:renderAll,fotoUrl:fotoUrl,handleCode:handleCode,code128Widths:code128Widths,buildTicket:buildTicket,ticketRaster:ticketRaster,phomemoJob:phomemoJob};
+window.POS={S:S,api:api,toast:toast,esc:esc,fmt:fmt,norm:norm,openM:openM,closeM:closeM,loadCatalog:loadCatalog,renderAll:renderAll,fotoUrl:fotoUrl,handleCode:handleCode,code128Widths:code128Widths,buildTicket:buildTicket,buildNota:buildNota,ticketRaster:ticketRaster,phomemoJob:phomemoJob};
 
 /* ===================================================================
    ARRANQUE
