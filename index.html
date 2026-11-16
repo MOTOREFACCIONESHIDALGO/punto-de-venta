@@ -177,7 +177,15 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
 .dhead .f{font-size:22px;font-weight:800}
 .dsum{font-weight:700;margin:10px 0}
 .ncok{color:var(--ok)}
+.arow.depr{flex-wrap:wrap}
+.arow.depr .mid{flex:1 1 130px}
 .tag.ok{color:var(--ok);border-color:var(--ok)}
+.serl{display:flex;gap:8px;align-items:center;padding:6px 0;font-size:14px;overflow-wrap:anywhere}
+.serl input{width:22px;height:22px;flex:0 0 22px}
+.barow{padding:8px 0;border-bottom:1px solid var(--line)}
+.barow input{margin-top:6px}
+.qchips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.qchips button{border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:8px 12px;font-size:13px;font-weight:600}
 .mecbox{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0;font-size:14px;overflow-wrap:anywhere}
 .mecbox .mini{padding:8px 6px}
 .fr{display:flex;gap:8px;align-items:stretch}
@@ -361,6 +369,15 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
 </div></div>
 <div id="printArea" aria-hidden="true"></div>
 
+<!-- ============ MODAL: BATERÍAS (serie y voltaje) ============ -->
+<div class="modal" id="mBat" role="dialog" aria-modal="true"><div class="sheet" style="max-width:440px">
+  <h2>Serie y voltaje de la batería</h2>
+  <div class="hint" id="baName"></div>
+  <div id="baList"></div>
+  <div class="err" id="baErr" role="alert"></div>
+  <div class="row" style="margin-top:8px"><button class="btn sec" id="baCancel" type="button">Cancelar</button><button class="btn" id="baOk" type="button">Guardar</button></div>
+</div></div>
+
 <!-- ============ MODAL: CLIENTE MECÁNICO (descuento) ============ -->
 <div class="modal" id="mMecSel" role="dialog" aria-modal="true"><div class="sheet" style="max-width:420px">
   <h2>Cliente mecánico</h2>
@@ -431,7 +448,7 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
     <button data-t="des">Descuentos</button>
     <button data-t="usr">Usuarios</button>
     <button data-t="pre">Precios</button>
-    <button data-t="ven">Ventas del día</button>
+    <button data-t="ven">Reportes</button>
     <button data-t="aju">Ajustes</button>
   </nav>
   <div class="admbody" id="admBody"></div>
@@ -687,6 +704,10 @@ function lineCalc(l){
   return b?{lista:lista,pct:b.pct,tipo:b.tipo,precio:r2(lista*(1-b.pct/100))}:{lista:lista,pct:0,tipo:'',precio:lista};
 }
 const linePrice=l=>lineCalc(l).precio;
+// baterías: una serie y un voltaje probado por cada pieza
+const needBat=l=>{const p=getP(l.codigo);return !!(p&&p.bateria)};
+const batOk=l=>!needBat(l)||(Array.isArray(l.bat)&&l.bat.length===l.qty&&l.bat.every(b=>b&&b.serie&&b.voltaje>0));
+const batPend=()=>S.cart.find(l=>!batOk(l));
 const cartTotal=()=>S.cart.reduce((s,l)=>s+Math.round(linePrice(l)*l.qty*100)/100,0);
 const cartCount=()=>S.cart.reduce((s,l)=>s+l.qty,0);
 function addToCart(code,silent){
@@ -704,8 +725,9 @@ function renderCart(){
     const p=getP(l.codigo);if(!p)return '';
     const lc=lineCalc(l);const lp=lc.precio;const custom=l.precio!=null;
     return '<div class="line"><div class="t"><span>'+esc(p.desc)+'</span><span class="s">'+fmt(lp*l.qty)+'</span></div>'+
-      '<div class="sub">'+esc(p.codigo)+' · '+fmt(lp)+' c/u'+(lc.pct>0?' <span class="tag ok">'+lc.pct+' % '+esc(lc.tipo)+' · lista '+fmt(lc.lista)+'</span>':'')+(custom?' <span class="tag el">precio cambiado (lista '+fmt(p.precio)+')</span>':'')+(p.electrico?' <span class="tag el">Eléctrico: sin cambios ni devoluciones</span>':'')+'</div>'+
+      '<div class="sub">'+esc(p.codigo)+' · '+fmt(lp)+' c/u'+(lc.pct>0?' <span class="tag ok">'+lc.pct+' % '+esc(lc.tipo)+' · lista '+fmt(lc.lista)+'</span>':'')+(custom?' <span class="tag el">precio cambiado (lista '+fmt(p.precio)+')</span>':'')+(p.electrico?' <span class="tag el">Eléctrico: sin cambios ni devoluciones</span>':'')+(needBat(l)?(batOk(l)?' <span class="tag ok">serie y voltaje ✓</span>':' <span class="tag red">falta serie y voltaje</span>'):'')+'</div>'+
       '<div class="row2"><div class="qty"><button data-a="minus" data-c="'+esc(l.codigo)+'" aria-label="Menos">−</button><span>'+l.qty+'</span><button data-a="plus" data-c="'+esc(l.codigo)+'" aria-label="Más">+</button></div>'+
+      (needBat(l)?'<button class="mini" data-a="bat" data-c="'+esc(l.codigo)+'">Serie y voltaje</button>':'')+
       '<button class="mini" data-a="price" data-c="'+esc(l.codigo)+'">Cambiar precio</button>'+
       '<button class="mini red" data-a="rm" data-c="'+esc(l.codigo)+'">Quitar</button></div></div>';
   }).join('');
@@ -719,12 +741,54 @@ $('#lines').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   const c=b.dataset.c,a=b.dataset.a;const l=S.cart.find(x=>x.codigo===c);if(!l)return;
   if(a==='plus'){const p=getP(c);if(p&&l.qty+1>p.existencia){toast('No hay más existencia de '+p.desc);return}l.qty++}
-  else if(a==='minus'){l.qty--;if(l.qty<=0)S.cart=S.cart.filter(x=>x!==l)}
+  else if(a==='minus'){l.qty--;if(l.bat)l.bat=l.bat.slice(0,Math.max(l.qty,0));if(l.qty<=0)S.cart=S.cart.filter(x=>x!==l)}
   else if(a==='rm'){S.cart=S.cart.filter(x=>x!==l)}
   else if(a==='price'){askPrice(c);return}
+  else if(a==='bat'){openBat(c);return}
   renderCart();
 });
 $('#clearCart').addEventListener('click',()=>{S.cart=[];S.mec=null;renderCart()});
+// ----- baterías: captura de serie y voltaje
+function openBat(code){
+  const l=S.cart.find(x=>x.codigo===code),p=getP(code);if(!l||!p)return;
+  S.batCode=code;$('#baName').textContent=p.desc+' · '+l.qty+' pieza'+(l.qty===1?'':'s')+'. Escribe o escanea la serie y el voltaje que probaste.';
+  let h='';
+  for(let i=0;i<l.qty;i++){
+    const b=(l.bat&&l.bat[i])||{};
+    h+='<div class="barow"><div class="hint" style="margin:0">Batería '+(i+1)+' de '+l.qty+'</div>'+
+      '<div class="fr" style="margin-top:6px"><input class="baSer" data-i="'+i+'" placeholder="Número de serie" autocapitalize="characters" autocomplete="off" value="'+esc(b.serie||'')+'" aria-label="Número de serie de la batería '+(i+1)+'"><button class="iconbtn baScan" data-i="'+i+'" type="button" aria-label="Escanear serie">📷</button></div>'+
+      '<input class="baVol" data-i="'+i+'" type="number" step="0.01" min="0" max="60" inputmode="decimal" placeholder="Voltaje probado (V), ej. 12.6" value="'+(b.voltaje||'')+'" aria-label="Voltaje de la batería '+(i+1)+'"></div>';
+  }
+  $('#baList').innerHTML=h;$('#baErr').textContent='';openM('#mBat');
+  setTimeout(()=>{try{if(window.matchMedia('(pointer:fine)').matches){const f=$('#baList .baSer');if(f)f.focus()}}catch(e){}},50);
+}
+function saveBat(){
+  const l=S.cart.find(x=>x.codigo===S.batCode);if(!l){closeM('#mBat');return}
+  const err=$('#baErr');err.textContent='';
+  const ser=$$('#baList .baSer'),vol=$$('#baList .baVol');const arr=[],seen={};
+  for(let i=0;i<l.qty;i++){
+    const serie=ser[i].value.trim(),v=parseFloat(vol[i].value);
+    if(!/^[A-Za-z0-9._\-\/]{3,40}$/.test(serie)){err.textContent='Batería '+(i+1)+': la serie debe tener de 3 a 40 caracteres, sin espacios.';ser[i].focus();return}
+    if(!(v>0&&v<=60)){err.textContent='Batería '+(i+1)+': escribe el voltaje probado (por ejemplo 12.6).';vol[i].focus();return}
+    const k=serie.toUpperCase();
+    if(seen[k]){err.textContent='La serie '+serie+' está repetida.';ser[i].focus();return}
+    if(S.cart.some(x=>x!==l&&x.bat&&x.bat.some(b=>String(b.serie).toUpperCase()===k))){err.textContent='La serie '+serie+' ya está en otra línea de la venta.';ser[i].focus();return}
+    seen[k]=1;arr.push({serie:serie,voltaje:Math.round(v*100)/100});
+  }
+  l.bat=arr;closeM('#mBat');renderCart();
+  if(S.batThenPay){const n=batPend();if(n)openBat(n.codigo);else{S.batThenPay=false;openPay()}}
+}
+$('#baOk').addEventListener('click',saveBat);
+$('#baCancel').addEventListener('click',()=>{S.batThenPay=false;closeM('#mBat')});
+$('#baList').addEventListener('click',e=>{
+  const b=e.target.closest('.baScan');if(!b)return;
+  const i=Number(b.dataset.i);openScanner(code=>{const f=$$('#baList .baSer')[i];if(f){f.value=String(code).trim().toUpperCase();const v=$$('#baList .baVol')[i];if(v)v.focus()}});
+});
+$('#baList').addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;e.preventDefault();
+  const t=e.target;if(t.classList.contains('baSer')){const v=$$('#baList .baVol')[Number(t.dataset.i)];if(v)v.focus()}
+  else if(t.classList.contains('baVol')){const nx=$$('#baList .baSer')[Number(t.dataset.i)+1];if(nx)nx.focus();else saveBat()}
+});
 // ----- cliente mecánico
 function renderMec(){
   const b=$('#mecBox');if(!b)return;
@@ -827,6 +891,8 @@ function buildQuick(){
 }
 function openPay(){
   if(!S.cart.length)return;
+  const pend=batPend();
+  if(pend){S.batThenPay=true;toast('Captura la serie y el voltaje de cada batería');openBat(pend.codigo);return}
   S.nc=null;$('#ncForm').hidden=true;$('#ncFolio').value='';$('#ncInfo').textContent='';
   $('#payTotal').textContent=fmt(cartTotal());
   S.pay='Efectivo';$$('#payMethods button').forEach(b=>b.classList.toggle('on',b.dataset.m==='Efectivo'));
@@ -877,7 +943,7 @@ async function confirmarVenta(){
   const total=Math.round(cartTotal()*100)/100,due=payDue(),cash=S.pay==='Efectivo'&&due>0.004;
   let rec=due;
   if(cash){rec=parseFloat($('#recv').value);if(isNaN(rec)||rec<due-0.005)return}
-  const items=S.cart.map(l=>{const o={codigo:l.codigo,qty:l.qty};if(l.precio!=null)o.precio=l.precio;return o});
+  const items=S.cart.map(l=>{const o={codigo:l.codigo,qty:l.qty};if(l.precio!=null)o.precio=l.precio;if(needBat(l)&&l.bat)o.series=l.bat;return o});
   const custom=S.cart.some(l=>l.precio!=null);
   let auth;
   if(custom&&S.user.rol!=='admin'){
@@ -1172,12 +1238,19 @@ async function admDeps(){
 }
 function admDepsRender(){
   const j=A.deps;
-  admBody().innerHTML='<div class="acard"><div class="hint">Marca como <b>eléctrico</b> los departamentos que no aceptan cambios ni devoluciones. Si renombras uno con el nombre de otro que ya existe, se unen.</div>'+
+  admBody().innerHTML='<div class="acard"><div class="hint">Marca como <b>eléctrico</b> los departamentos que no aceptan cambios ni devoluciones, y como <b>batería</b> los que piden número de serie y voltaje al vender. Si renombras uno con el nombre de otro que ya existe, se unen.</div>'+
     '<div class="row" style="margin-top:8px;align-items:center"><input id="depNew" placeholder="Nuevo departamento" autocomplete="off"><button class="btn auto" data-act="depAdd" style="flex:0 0 auto">Agregar</button></div></div>'+
     (j.sinDepto?'<div class="acard"><b>'+j.sinDepto+'</b> producto'+(j.sinDepto===1?'':'s')+' sin departamento. <button class="btn sec auto" data-act="depGo">Verlos</button></div>':'')+
-    '<div>'+j.departamentos.map(d=>'<div class="arow nopoint"><div class="mid"><b>'+esc(d.nombre)+'</b><small>'+d.productos+' producto'+(d.productos===1?'':'s')+'</small></div>'+
+    '<div>'+j.departamentos.map(d=>'<div class="arow nopoint depr"><div class="mid"><b>'+esc(d.nombre)+'</b><small>'+d.productos+' producto'+(d.productos===1?'':'s')+'</small></div>'+
       '<label class="chk" style="margin:0"><input type="checkbox" class="elchk" data-d="'+esc(d.nombre)+'" '+(d.electrico?'checked':'')+'> Eléctrico</label>'+
+      '<label class="chk" style="margin:0"><input type="checkbox" class="batchk" data-d="'+esc(d.nombre)+'" '+(d.bateria?'checked':'')+'> Batería</label>'+
       '<button class="btn sec auto" data-act="depRename" data-d="'+esc(d.nombre)+'">Renombrar</button></div>').join('')+'</div>';
+}
+async function toggleBat(chk){
+  const v=chk.checked;chk.disabled=true;
+  try{await api('saveDep',{nombre:chk.dataset.d,bateria:v});A.dirty=true;toast(chk.dataset.d+(v?': pedirá serie y voltaje al vender':': ya no pide serie ni voltaje'))}
+  catch(e){chk.checked=!v;failToast(e)}
+  chk.disabled=false;
 }
 async function toggleEl(chk){
   const v=chk.checked;chk.disabled=true;
@@ -1328,8 +1401,54 @@ function prevCsv(){
 }
 
 /* ---------- Ventas del día ---------- */
+const dstr=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+function rgQuick(k){
+  const h=new Date();let a=new Date(h),b=new Date(h);
+  if(k==='ayer'){a.setDate(a.getDate()-1);b=new Date(a)}
+  else if(k==='7'){a.setDate(a.getDate()-6)}
+  else if(k==='mes'){a=new Date(h.getFullYear(),h.getMonth(),1)}
+  else if(k==='mesant'){a=new Date(h.getFullYear(),h.getMonth()-1,1);b=new Date(h.getFullYear(),h.getMonth(),0)}
+  $('#rgD').value=dstr(a);$('#rgH').value=dstr(b);
+}
+async function rgGo(el,detalle){
+  const desde=$('#rgD').value,hasta=$('#rgH').value;
+  if(!desde||!hasta){toast('Elige las fechas');return}
+  await busy(el,'Calculando…',async()=>{
+    try{
+      const j=await api('reportRange',{desde:desde,hasta:hasta,sucursal:$('#rgS').value,detalle:!!detalle});
+      const sel=$('#rgS'),cur=sel.value;sel.innerHTML='<option value="">Todas</option>'+j.sucursales.map(x=>'<option'+(x===cur?' selected':'')+'>'+esc(x)+'</option>').join('');
+      if(detalle){downloadCsv('ventas_'+desde+'_a_'+hasta+'.csv',j.detalle||[]);return}
+      rgRender(j);
+    }catch(e){failToast(e)}
+  });
+}
+function rgRender(j){
+  const st=[['Ventas',j.num],['Venta neta',fmt(j.total)],['Ticket promedio',fmt(j.ticketPromedio)],['Devuelto',fmt(j.devuelto)],['Descuentos otorgados',fmt(j.descuentoTotal)],
+    ['Notas de crédito emitidas',j.notasEmitidas.num+' · '+fmt(j.notasEmitidas.monto)],['Pagado con notas',fmt(j.pagadoConNotas)],['Ventas canceladas',j.canceladas+' · '+fmt(j.canceladoMonto)],['Baterías vendidas',j.baterias]]
+    .concat(Object.keys(j.porMetodo).map(k=>['Cobrado: '+k,fmt(j.porMetodo[k])]),Object.keys(j.porUsuario).map(k=>['Vendedor: '+k,fmt(j.porUsuario[k])]),Object.keys(j.porSucursal).map(k=>['Sucursal: '+k,fmt(j.porSucursal[k])]),Object.keys(j.descuentos).map(k=>['Descuento '+k,fmt(j.descuentos[k])]));
+  $('#rgOut').innerHTML='<div class="hint">Del '+fdmy(j.desde)+' al '+fdmy(j.hasta)+(j.sucursal?' · sucursal '+esc(j.sucursal):' · todas las sucursales')+'. La venta neta ya descuenta lo devuelto.</div>'+
+    '<div class="stats">'+st.map(x=>'<div class="stat"><small>'+esc(x[0])+'</small><b>'+esc(x[1])+'</b></div>').join('')+'</div>'+
+    (j.porDia.length?'<div class="acard"><b>Por día</b>'+j.porDia.map(d=>'<div class="hint" style="display:flex;justify-content:space-between;gap:8px;margin:4px 0"><span>'+fdmy(d.fecha)+' · '+d.num+' venta'+(d.num===1?'':'s')+'</span><b>'+fmt(d.total)+'</b></div>').join('')+'</div>':'<div class="acard hint">No hay ventas en ese rango.</div>')+
+    (j.top.length?'<div class="acard"><b>Lo más vendido</b>'+j.top.map(p=>'<div class="hint" style="display:flex;justify-content:space-between;gap:8px;margin:4px 0"><span style="min-width:0;overflow-wrap:anywhere">'+p.qty+' × '+esc(p.desc||p.codigo)+'</span><b>'+fmt(p.importe)+'</b></div>').join('')+'</div>':'');
+}
+async function bsGo(el){
+  const v=$('#bsSer').value.trim();const out=$('#bsOut');if(!v){out.innerHTML='<div class="hint">Escribe o escanea el número de serie.</div>';return}
+  await busy(el,'Buscando…',async()=>{
+    try{
+      const j=await api('findBattery',{serie:v});
+      out.innerHTML=j.baterias.map(b=>'<div class="arow nopoint"><div class="mid"><b>Serie '+esc(b.serie)+' · '+b.voltaje+' V</b><small>'+esc(b.desc||b.codigo)+'</small><small>Folio '+esc(b.folio)+' · '+fdmy(b.fecha)+' '+esc(b.hora)+' · '+esc(b.vendedor)+(b.sucursal?' · '+esc(b.sucursal):'')+'</small></div><span class="tag'+(b.estado==='VENDIDA'?' ok':' red')+'">'+esc(b.estado)+'</span></div>').join('');
+    }catch(e){out.innerHTML='<div class="hint" style="color:var(--danger)">'+esc(errMsg(e))+'</div>'}
+  });
+}
 function admVentas(){
-  admBody().innerHTML='<div class="acard"><div class="row" style="align-items:flex-end"><div><label for="vDate">Fecha</label><input type="date" id="vDate" value="'+todayStr()+'"></div><button class="btn auto" data-act="venLoad" style="flex:0 0 auto">Ver</button></div></div><div id="venOut"></div>';
+  admBody().innerHTML='<div class="acard"><b>Reporte por fechas</b>'+
+    '<div class="fgrid"><div><label for="rgD">Desde</label><input type="date" id="rgD" value="'+todayStr()+'"></div><div><label for="rgH">Hasta</label><input type="date" id="rgH" value="'+todayStr()+'"></div>'+
+    '<div style="grid-column:1/-1"><label for="rgS">Sucursal</label><select id="rgS"><option value="">Todas</option></select></div></div>'+
+    '<div class="qchips"><button data-act="rgQ" data-r="hoy">Hoy</button><button data-act="rgQ" data-r="ayer">Ayer</button><button data-act="rgQ" data-r="7">Últimos 7 días</button><button data-act="rgQ" data-r="mes">Este mes</button><button data-act="rgQ" data-r="mesant">Mes anterior</button></div>'+
+    '<div class="row"><button class="btn auto" data-act="rgGo">Generar reporte</button><button class="btn sec auto" data-act="rgCsv">Descargar detalle (Excel)</button></div></div><div id="rgOut"></div>'+
+    '<div class="acard"><b>Buscar batería por número de serie</b><div class="hint">Para garantías: te dice en qué venta salió, con qué voltaje y quién la vendió.</div>'+
+    '<div class="fr"><input id="bsSer" placeholder="Número de serie" autocapitalize="characters" autocomplete="off" aria-label="Número de serie"><button class="btn auto" data-act="bsGo" style="flex:0 0 auto;width:auto">Buscar</button></div><div id="bsOut" style="margin-top:8px"></div></div>'+
+    '<div class="acard"><b>Ventas de un día</b> <span class="hint">(con el detalle de cada folio)</span><div class="row" style="align-items:flex-end"><div><label for="vDate">Fecha</label><input type="date" id="vDate" value="'+todayStr()+'"></div><button class="btn auto" data-act="venLoad" style="flex:0 0 auto">Ver</button></div></div><div id="venOut"></div>';
   venLoad();
 }
 async function venLoad(){
@@ -1404,10 +1523,15 @@ const ACT={
   preApply(el){return prevApply(el)},
   preCsv(){prevCsv()},
   venLoad(){return venLoad()},
+  rgQ(el){rgQuick(el.dataset.r)},
+  rgGo(el){return rgGo(el,false)},
+  rgCsv(el){return rgGo(el,true)},
+  bsGo(el){return bsGo(el)},
   ajSave(el){return ajSave(el)},
   ajPass(el){return ajPass(el)}
 };
 let pqT;
+admBody().addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='bsSer'){e.preventDefault();bsGo($('[data-act="bsGo"]'))}});
 admBody().addEventListener('input',e=>{
   if(e.target.id==='pq'){pf.q=e.target.value;clearTimeout(pqT);pqT=setTimeout(admProdList,120)}
   else if(e.target.id==='pvQ'){renderPrevList()}
@@ -1419,6 +1543,7 @@ admBody().addEventListener('change',e=>{
   else if(t.id==='batchFile'){const f=t.files;admBatch(f);t.value=''}
   else if(t.id==='pvG'){renderPrevList()}
   else if(t.classList&&t.classList.contains('elchk')){toggleEl(t)}
+  else if(t.classList&&t.classList.contains('batchk')){toggleBat(t)}
   else if(t.classList&&t.classList.contains('depdesc')){saveDepDesc(t)}
 });
 admBody().addEventListener('click',e=>{
@@ -1508,6 +1633,7 @@ function buildTicket(v,cfg){
   if(v.corregido)k.text('TICKET CORREGIDO',20,{bold:1,align:'center'});
   k.text(fdmy(v.fecha)+' '+String(v.hora||'').slice(0,5),18,{align:'center'});
   if(v.vendedor)k.text('Atendió: '+v.vendedor,18,{align:'center'});
+  if(v.sucursal&&v.sucursal!=='Principal')k.text('Sucursal: '+v.sucursal,18,{align:'center'});
   if(v.mecanico)k.text('Mecánico: '+v.mecanico,18,{align:'center'});
   k.rule(true);
   let hayElec=false;
@@ -1518,6 +1644,7 @@ function buildTicket(v,cfg){
       k.pair(it.qty+' x '+fmt(it.lista),fmt(r2(it.lista*it.qty)),20);
       k.pair('  Desc. '+it.descTipo+' '+it.descPct+'%','-'+fmt(r2(it.lista*it.qty-it.importe)),16);
     }else k.pair(it.qty+' x '+fmt(it.precio),fmt(it.importe),20);
+    (it.baterias||[]).forEach(b=>k.text('  Serie '+b.serie+' · '+b.voltaje+' V',16));
   });
   k.rule(true);
   k.pair('TOTAL',fmt(v.total),30,{bold:1});
@@ -1680,9 +1807,9 @@ $('#tkClose').addEventListener('click',()=>closeM('#mTicket'));
 /* ===================================================================
    DEVOLUCIONES Y CANCELACIONES (el servidor valida plazos, eléctricos y existencias)
    =================================================================== */
-const D={sale:null,ticket:null,sel:{},nota:null,busy:false};
+const D={sale:null,ticket:null,sel:{},ser:{},nota:null,busy:false};
 function devReset(){
-  D.sale=null;D.ticket=null;D.sel={};D.nota=null;
+  D.sale=null;D.ticket=null;D.sel={};D.ser={};D.nota=null;
   $('#devSale').hidden=true;$('#devResult').hidden=true;$('#devErr').textContent='';
   $('#devMotivo').value='';$('#devTipo').innerHTML='';
 }
@@ -1694,7 +1821,7 @@ async function devFind(folio){
   const b=$('#devFind');b.disabled=true;
   try{
     const j=await api('findSale',{folio:f});
-    D.sale=j.venta;D.ticket=j.ticket;D.sel={};
+    D.sale=j.venta;D.ticket=j.ticket;D.sel={};D.ser={};
     $('#devTipo').innerHTML='<option value="">Elige el tipo…</option>'+j.tipos.map(t=>'<option>'+esc(t)+'</option>').join('');
     $('#devMotivo').value='';
     renderDev();
@@ -1706,6 +1833,14 @@ function renderDevLines(){
   const v=D.sale;
   $('#devLines').innerHTML=v.lineas.map(l=>{
     const on=D.sel[l.n]!=null,dis=l.disponible<1;
+    if(l.series&&l.series.length){ // baterías: se elige por número de serie
+      const sel=D.ser[l.n]||[];
+      return '<div class="dline'+(dis?' off':'')+'"><div class="dl-b"><div class="dl-t">'+esc(l.desc)+'</div>'+
+        '<div class="sub">'+esc(l.codigo)+' · '+l.qty+' × '+fmt(l.precio)+'</div>'+
+        '<div>'+(l.electrico?'<span class="tag el">Eléctrico</span> ':'')+(!dis&&l.requiereAdmin?'<span class="tag red">Requiere administrador</span>':'')+'</div>'+
+        l.series.map(sr=>'<label class="serl"><input type="checkbox" class="serchk" data-n="'+l.n+'" data-s="'+esc(sr.serie)+'"'+(sel.indexOf(sr.serie)>=0?' checked':'')+(sr.estado!=='VENDIDA'?' disabled':'')+'> <span>Serie '+esc(sr.serie)+' · '+sr.voltaje+' V'+(sr.estado!=='VENDIDA'?' <span class="tag">Devuelta</span>':'')+'</span></label>').join('')+
+        '</div></div>';
+    }
     return '<div class="dline'+(dis?' off':'')+'"><input type="checkbox" data-n="'+l.n+'"'+(on?' checked':'')+(dis?' disabled':'')+' aria-label="Devolver '+esc(l.desc)+'">'+
       '<div class="dl-b"><div class="dl-t">'+esc(l.desc)+'</div>'+
       '<div class="sub">'+esc(l.codigo)+' · '+l.qty+' × '+fmt(l.precio)+(l.devuelta?' · ya devueltas: '+l.devuelta:'')+'</div>'+
@@ -1733,6 +1868,12 @@ function renderDev(){
 }
 $('#devLines').addEventListener('change',e=>{
   const c=e.target.closest('input[type=checkbox]');if(!c)return;
+  if(c.classList.contains('serchk')){
+    const n=c.dataset.n,sr=c.dataset.s;let a=D.ser[n]||[];
+    if(c.checked){if(a.indexOf(sr)<0)a=a.concat([sr])}else a=a.filter(x=>x!==sr);
+    if(a.length){D.ser[n]=a;D.sel[n]=a.length}else{delete D.ser[n];delete D.sel[n]}
+    renderDevLines();return;
+  }
   const n=c.dataset.n;if(c.checked)D.sel[n]=1;else delete D.sel[n];renderDevLines();
 });
 $('#devLines').addEventListener('click',e=>{
@@ -1743,7 +1884,7 @@ $('#devLines').addEventListener('click',e=>{
 async function devSubmit(){
   if(D.busy||!D.sale)return;
   const err=$('#devErr');err.textContent='';
-  const items=Object.keys(D.sel).map(n=>({n:Number(n),qty:D.sel[n]}));
+  const items=Object.keys(D.sel).map(n=>{const o={n:Number(n),qty:D.sel[n]};if(D.ser[n])o.series=D.ser[n];return o});
   const tipo=$('#devTipo').value,motivo=$('#devMotivo').value.trim();
   if(!items.length){err.textContent='Marca al menos una pieza.';return}
   if(!tipo){err.textContent='Elige el tipo de devolución.';$('#devTipo').focus();return}
@@ -1795,7 +1936,7 @@ document.addEventListener('keydown',e=>{
   if(S.admOpen)admClose();
 });
 // Puntos de enganche para las partes siguientes (administración, ticket, devoluciones...)
-window.POS={S:S,api:api,toast:toast,esc:esc,fmt:fmt,norm:norm,openM:openM,closeM:closeM,loadCatalog:loadCatalog,renderAll:renderAll,fotoUrl:fotoUrl,handleCode:handleCode,code128Widths:code128Widths,buildTicket:buildTicket,buildNota:buildNota,lineCalc:lineCalc,ticketRaster:ticketRaster,phomemoJob:phomemoJob};
+window.POS={S:S,api:api,toast:toast,esc:esc,fmt:fmt,norm:norm,openM:openM,closeM:closeM,loadCatalog:loadCatalog,renderAll:renderAll,fotoUrl:fotoUrl,handleCode:handleCode,code128Widths:code128Widths,buildTicket:buildTicket,buildNota:buildNota,lineCalc:lineCalc,batOk:batOk,ticketRaster:ticketRaster,phomemoJob:phomemoJob};
 
 /* ===================================================================
    ARRANQUE
