@@ -177,6 +177,9 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
 .dhead .f{font-size:22px;font-weight:800}
 .dsum{font-weight:700;margin:10px 0}
 .ncok{color:var(--ok)}
+.tag.ok{color:var(--ok);border-color:var(--ok)}
+.mecbox{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0;font-size:14px;overflow-wrap:anywhere}
+.mecbox .mini{padding:8px 6px}
 .fr{display:flex;gap:8px;align-items:stretch}
 .fr input{flex:1;min-width:0}
 .fr .iconbtn{flex:0 0 48px}
@@ -243,6 +246,7 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
         <button id="closecart" aria-label="Cerrar carrito">✕</button>
         <h2>Venta actual</h2>
         <div id="lines"></div>
+        <div class="mecbox" id="mecBox"></div>
         <div class="total"><span>Total</span><span id="cartTotal">$0.00</span></div>
         <div class="row">
           <button class="btn sec" id="clearCart">Vaciar</button>
@@ -357,6 +361,28 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
 </div></div>
 <div id="printArea" aria-hidden="true"></div>
 
+<!-- ============ MODAL: CLIENTE MECÁNICO (descuento) ============ -->
+<div class="modal" id="mMecSel" role="dialog" aria-modal="true"><div class="sheet" style="max-width:420px">
+  <h2>Cliente mecánico</h2>
+  <div class="hint">Escribe o escanea el código del mecánico para aplicar su descuento.</div>
+  <div class="fr"><input id="msCode" placeholder="Código del mecánico" autocapitalize="characters" autocomplete="off" aria-label="Código del mecánico"><button class="iconbtn" id="msScan" type="button" aria-label="Escanear código del mecánico">📷</button></div>
+  <div class="err" id="msErr" role="alert"></div>
+  <div class="row" style="margin-top:8px"><button class="btn sec" id="msCancel" type="button">Cancelar</button><button class="btn" id="msOk" type="button">Aplicar</button></div>
+</div></div>
+
+<!-- ============ ADMIN: crear / editar mecánico ============ -->
+<div class="modal" id="mMecEd" role="dialog" aria-modal="true"><form class="sheet" id="mecForm" style="max-width:460px" autocomplete="off">
+  <h2 id="meTitle">Mecánico</h2>
+  <label for="meCod">Código (de barras, QR o el que tú quieras)</label>
+  <div class="fr"><input id="meCod" autocapitalize="characters" required><button class="iconbtn" id="meScan" type="button" aria-label="Escanear código">📷</button><button class="btn sec" id="meGen" type="button" style="width:auto;flex:0 0 auto">Generar</button></div>
+  <label for="meNom" style="display:block;margin-top:8px">Nombre</label><input id="meNom" required>
+  <label for="meTel" style="display:block;margin-top:8px">Teléfono (opcional)</label><input id="meTel" type="tel">
+  <label class="chk" for="meAct"><input type="checkbox" id="meAct" checked> Mecánico activo</label>
+  <div class="hint">Si ya tiene una credencial con código de barras o QR, escanéala. Si no, usa “Generar” o escribe el código que quieras.</div>
+  <div class="err" id="meErr" role="alert"></div>
+  <div class="row" style="margin-top:8px"><button class="btn sec" id="meCancel" type="button">Cancelar</button><button class="btn" id="meOk" type="submit">Guardar</button></div>
+</form></div>
+
 <!-- ============ MODAL: CAMBIO DE PRECIO ============ -->
 <div class="modal" id="mPrice" role="dialog" aria-modal="true"><div class="sheet">
   <h2>Cambiar precio</h2>
@@ -402,6 +428,7 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
   <nav class="admtabs" id="admTabs">
     <button data-t="prod" class="on">Productos</button>
     <button data-t="dep">Departamentos</button>
+    <button data-t="des">Descuentos</button>
     <button data-t="usr">Usuarios</button>
     <button data-t="pre">Precios</button>
     <button data-t="ven">Ventas del día</button>
@@ -489,13 +516,14 @@ function beep(){try{const A=window.AudioContext||window.webkitAudioContext;const
 function openM(id){$(id).classList.add('on')}
 function closeM(id){$(id).classList.remove('on')}
 const modalOpen=()=>!!document.querySelector('.modal.on');
+const r2=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
 const fdmy=s=>{const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[3]+'/'+m[2]+'/'+m[1]:String(s||'')};
 
 /* ===================================================================
    ESTADO
    =================================================================== */
 const S={url:'',token:'',user:null,config:{},prods:[],byCode:{},cat:'',q:'',cart:[],pay:'Efectivo',
-  auth:null,authAt:0,busy:false,fichaCode:null,priceCode:null,lastSale:null,nc:null};
+  auth:null,authAt:0,busy:false,fichaCode:null,priceCode:null,lastSale:null,nc:null,mec:null,descCfg:{mecanico:0,volumen:0,volMin:16,deps:{}}};
 const AUTH_MS=170000; // el servidor la da por 180 s; aquí un margen
 const MAX_SHOW=200;
 
@@ -521,7 +549,7 @@ async function api(action,data){
    =================================================================== */
 function screen(id){$$('.screen').forEach(s=>s.classList.toggle('on',s.id===id))}
 function endSession(msg){
-  S.token='';S.user=null;S.prods=[];S.byCode={};S.cart=[];S.auth=null;S.lastSale=null;
+  S.token='';S.user=null;S.prods=[];S.byCode={};S.cart=[];S.auth=null;S.lastSale=null;S.mec=null;
   S.admOpen=false;$('#adm').hidden=true;document.body.style.overflow='';A.prev=null;A.dirty=false;
   ssDel('pos_tok');ssDel('pos_user');
   $$('.modal.on').forEach(m=>m.classList.remove('on'));
@@ -582,6 +610,7 @@ $('#btnLogout').addEventListener('click',async()=>{
 async function loadCatalog(){
   const j=await api('catalog');
   S.prods=j.productos||[];S.config=j.config||S.config;
+  S.descCfg=j.descuentos||S.descCfg;
   S.byCode={};
   S.prods.forEach(p=>{p._n=norm(p.desc+' '+p.codigo+' '+p.depto);S.byCode[String(p.codigo).toUpperCase()]=p});
   // el carrito se ajusta a lo que haya ahora en existencia
@@ -646,7 +675,18 @@ $('#grid').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.t
    VENTA · carrito
    =================================================================== */
 const getP=c=>S.byCode[String(c).toUpperCase()];
-const linePrice=l=>{const p=getP(l.codigo);return l.precio!=null?l.precio:(p?p.precio:0)};
+// Vista previa del descuento (el servidor lo vuelve a calcular). Un solo descuento por línea: el mayor.
+function lineCalc(l){
+  const p=getP(l.codigo);const lista=p?p.precio:0;
+  if(l.precio!=null)return {lista:lista,pct:0,tipo:'',precio:l.precio};
+  const dc=S.descCfg||{};
+  const c=[{pct:S.mec?(dc.mecanico||0):0,tipo:'Mecánico',prio:3},
+    {pct:l.qty>=(dc.volMin||16)?(dc.volumen||0):0,tipo:'Volumen',prio:2},
+    {pct:(dc.deps||{})[String(p&&p.depto||'').toUpperCase()]||0,tipo:'Departamento',prio:1}];
+  let b=null;c.forEach(x=>{if(x.pct>0&&(!b||x.pct>b.pct||(x.pct===b.pct&&x.prio>b.prio)))b=x});
+  return b?{lista:lista,pct:b.pct,tipo:b.tipo,precio:r2(lista*(1-b.pct/100))}:{lista:lista,pct:0,tipo:'',precio:lista};
+}
+const linePrice=l=>lineCalc(l).precio;
 const cartTotal=()=>S.cart.reduce((s,l)=>s+Math.round(linePrice(l)*l.qty*100)/100,0);
 const cartCount=()=>S.cart.reduce((s,l)=>s+l.qty,0);
 function addToCart(code,silent){
@@ -662,9 +702,9 @@ function renderCart(){
   if(!S.cart.length){$('#lines').innerHTML='<div class="empty" style="padding:22px 0">Toca “+” en un producto para agregarlo</div>'}
   else $('#lines').innerHTML=S.cart.map(l=>{
     const p=getP(l.codigo);if(!p)return '';
-    const lp=linePrice(l);const custom=l.precio!=null;
+    const lc=lineCalc(l);const lp=lc.precio;const custom=l.precio!=null;
     return '<div class="line"><div class="t"><span>'+esc(p.desc)+'</span><span class="s">'+fmt(lp*l.qty)+'</span></div>'+
-      '<div class="sub">'+esc(p.codigo)+' · '+fmt(lp)+' c/u'+(custom?' <span class="tag el">precio cambiado (lista '+fmt(p.precio)+')</span>':'')+(p.electrico?' <span class="tag el">Eléctrico: sin cambios ni devoluciones</span>':'')+'</div>'+
+      '<div class="sub">'+esc(p.codigo)+' · '+fmt(lp)+' c/u'+(lc.pct>0?' <span class="tag ok">'+lc.pct+' % '+esc(lc.tipo)+' · lista '+fmt(lc.lista)+'</span>':'')+(custom?' <span class="tag el">precio cambiado (lista '+fmt(p.precio)+')</span>':'')+(p.electrico?' <span class="tag el">Eléctrico: sin cambios ni devoluciones</span>':'')+'</div>'+
       '<div class="row2"><div class="qty"><button data-a="minus" data-c="'+esc(l.codigo)+'" aria-label="Menos">−</button><span>'+l.qty+'</span><button data-a="plus" data-c="'+esc(l.codigo)+'" aria-label="Más">+</button></div>'+
       '<button class="mini" data-a="price" data-c="'+esc(l.codigo)+'">Cambiar precio</button>'+
       '<button class="mini red" data-a="rm" data-c="'+esc(l.codigo)+'">Quitar</button></div></div>';
@@ -673,6 +713,7 @@ function renderCart(){
   $('#cartTotal').textContent=fmt(t);$('#cbTotal').textContent=fmt(t);
   $('#cbCount').textContent=S.cart.length?('Ver venta ('+cartCount()+')'):'Venta vacía';
   $('#checkout').disabled=!S.cart.length;
+  renderMec();
 }
 $('#lines').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
@@ -683,7 +724,32 @@ $('#lines').addEventListener('click',e=>{
   else if(a==='price'){askPrice(c);return}
   renderCart();
 });
-$('#clearCart').addEventListener('click',()=>{S.cart=[];renderCart()});
+$('#clearCart').addEventListener('click',()=>{S.cart=[];S.mec=null;renderCart()});
+// ----- cliente mecánico
+function renderMec(){
+  const b=$('#mecBox');if(!b)return;
+  b.innerHTML=S.mec?('<span>👷 <b>'+esc(S.mec.nombre)+'</b>'+(S.mec.pct>0?' · '+S.mec.pct+' %':' · sin porcentaje')+'</span><button class="mini red" id="mecOff" type="button">Quitar</button>'):'<button class="mini" id="mecBtn" type="button">👷 Cliente mecánico (descuento)</button>';
+}
+$('#mecBox').addEventListener('click',e=>{
+  if(e.target.closest('#mecOff')){S.mec=null;renderCart();return}
+  if(e.target.closest('#mecBtn')){$('#msCode').value='';$('#msErr').textContent='';openM('#mMecSel');setTimeout(()=>$('#msCode').focus(),50)}
+});
+async function mecApply(code){
+  const c=String(code==null?$('#msCode').value:code).trim();const err=$('#msErr');err.textContent='';
+  if(!c){err.textContent='Escribe o escanea el código del mecánico.';return}
+  const b=$('#msOk');b.disabled=true;
+  try{
+    const j=await api('findMechanic',{codigo:c});
+    S.mec=j.mecanico;S.descCfg=Object.assign({},S.descCfg,{mecanico:j.mecanico.pct});
+    closeM('#mMecSel');renderCart();
+    toast('Mecánico: '+S.mec.nombre+(S.mec.pct>0?' · '+S.mec.pct+' % de descuento':' (aún no hay porcentaje configurado)'));
+  }catch(e){if(e.code!=='SESION')err.textContent=e.message}
+  b.disabled=false;
+}
+$('#msOk').addEventListener('click',()=>mecApply());
+$('#msCode').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();mecApply()}});
+$('#msCancel').addEventListener('click',()=>closeM('#mMecSel'));
+$('#msScan').addEventListener('click',()=>openScanner(code=>{$('#msCode').value=String(code).trim();mecApply()}));
 $('#cartbar').addEventListener('click',()=>$('#cart').classList.add('open'));
 $('#closecart').addEventListener('click',()=>$('#cart').classList.remove('open'));
 
@@ -820,13 +886,13 @@ async function confirmarVenta(){
   }
   S.busy=true;const btn=$('#payOk');btn.disabled=true;btn.textContent='Guardando…';
   try{
-    const j=await api('saveSale',{metodo:S.pay,recibido:rec,items:items,auth:auth,notaFolio:S.nc?S.nc.folio:''});
+    const j=await api('saveSale',{metodo:S.pay,recibido:rec,items:items,auth:auth,notaFolio:S.nc?S.nc.folio:'',mecanico:S.mec?S.mec.codigo:''});
     const v=j.venta;S.lastSale=v;
     v.items.forEach(it=>{const p=getP(it.codigo);if(p)p.existencia=Math.max(0,p.existencia-it.qty)});
-    S.cart=[];S.auth=null;S.nc=null;
+    S.cart=[];S.auth=null;S.nc=null;S.mec=null;
     closeM('#mPay');$('#cart').classList.remove('open');
     $('#dFolio').textContent=v.folio;
-    $('#dInfo').textContent=fmt(v.total)+' · '+v.metodo+(v.nota?' · nota '+v.nota.folio+' −'+fmt(v.nota.aplicado)+(v.nota.saldo>0?' (quedan '+fmt(v.nota.saldo)+')':''):'');
+    $('#dInfo').textContent=fmt(v.total)+' · '+v.metodo+(v.mecanico?' · mecánico '+v.mecanico:'')+(v.nota?' · nota '+v.nota.folio+' −'+fmt(v.nota.aplicado)+(v.nota.saldo>0?' (quedan '+fmt(v.nota.saldo)+')':''):'');
     $('#dChange').textContent=v.metodo==='Efectivo'?'Cambio: '+fmt(v.cambio):'';
     openM('#mDone');renderAll();
     loadCatalog().then(renderAll).catch(()=>{});
@@ -966,13 +1032,13 @@ function admOpen(){
 }
 function admClose(){
   S.admOpen=false;$('#adm').hidden=true;document.body.style.overflow='';
-  ['#mProd','#mUser'].forEach(closeM);
+  ['#mProd','#mUser','#mMecEd'].forEach(closeM);
   if(A.dirty){A.dirty=false;loadCatalog().then(renderAll).catch(()=>{})}
 }
 function admTab(t){
   A.tab=t;$$('#admTabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   $('#adm').scrollTop=0;
-  ({prod:admProd,dep:admDeps,usr:admUsers,pre:admPrecios,ven:admVentas,aju:admAjustes})[t]();
+  ({prod:admProd,dep:admDeps,des:admDesc,usr:admUsers,pre:admPrecios,ven:admVentas,aju:admAjustes})[t]();
 }
 $('#btnAdmin').addEventListener('click',admOpen);
 $('#admX').addEventListener('click',admClose);
@@ -1119,6 +1185,64 @@ async function toggleEl(chk){
   catch(e){chk.checked=!v;failToast(e)}
   chk.disabled=false;
 }
+
+/* ---------- Descuentos y mecánicos ---------- */
+async function admDesc(){
+  loadingBox();
+  try{
+    const r=await Promise.all([api('listMechanics'),api('listDeps')]);
+    A.mecs=r[0].mecanicos;A.desc=r[0].descuentos;A.deps=r[1];admDescRender();
+  }catch(e){failToast(e);admBody().innerHTML='<div class="acard err">'+esc(errMsg(e))+'</div>'}
+}
+function admDescRender(){
+  const dc=A.desc;
+  admBody().innerHTML='<div class="acard"><b>Porcentajes de descuento</b>'+
+    '<div class="hint">En cada producto de una venta se aplica <u>un solo</u> descuento: si le tocan varios, se usa el mayor. Si el precio de un producto lo cambia un administrador, no se aplica ningún descuento.</div>'+
+    '<div class="fgrid"><div><label for="dsMec">Mecánicos (%)</label><input id="dsMec" type="number" min="0" max="90" step="0.5" inputmode="decimal" value="'+esc(dc.mecanico)+'"></div>'+
+    '<div><label for="dsVol">Por volumen (%)</label><input id="dsVol" type="number" min="0" max="90" step="0.5" inputmode="decimal" value="'+esc(dc.volumen)+'"></div></div>'+
+    '<div class="hint">Volumen: más de 15 piezas del <u>mismo código</u> en la venta; el descuento es solo para ese producto. 0 = sin descuento.</div>'+
+    '<div class="row" style="margin-top:8px;align-items:center"><button class="btn auto" data-act="dsSave" style="flex:0 0 auto">Guardar porcentajes</button><span class="okmsg" id="dsMsg" role="status"></span></div></div>'+
+    '<div class="acard"><b>Descuento por departamento</b><div class="hint">Se aplica a todos los productos del departamento (llantas, luces, etc.). Escribe el porcentaje y sal de la casilla para guardarlo; vacío = sin descuento.</div></div>'+
+    '<div>'+A.deps.departamentos.map(d=>'<div class="arow nopoint"><div class="mid"><b>'+esc(d.nombre)+'</b><small>'+d.productos+' producto'+(d.productos===1?'':'s')+'</small></div>'+
+      '<input class="depdesc" data-d="'+esc(d.nombre)+'" type="number" min="0" max="90" step="0.5" inputmode="decimal" placeholder="0" value="'+(d.descuento>0?esc(d.descuento):'')+'" style="width:84px;flex:0 0 84px" aria-label="Descuento de '+esc(d.nombre)+' en por ciento"><span>%</span></div>').join('')+'</div>'+
+    '<div class="acard"><div class="row" style="align-items:center"><div class="hint" style="margin:0"><b>Mecánicos</b>: dalos de alta con su nombre y un código (de barras, QR o normal). Todos tienen el mismo porcentaje.</div><button class="btn auto" data-act="mecNew" style="flex:0 0 auto">+ Nuevo mecánico</button></div></div>'+
+    '<div>'+(A.mecs.length?A.mecs.map(m=>'<div class="arow nopoint"><div class="mid"><b>'+esc(m.nombre)+'</b><small>Código: '+esc(m.codigo)+(m.telefono?' · '+esc(m.telefono):'')+'</small>'+(m.activo?'':'<span class="tag red">Desactivado</span>')+'</div><button class="btn sec auto" data-act="mecEdit" data-c="'+esc(m.codigo)+'">Editar</button></div>').join(''):'<div class="acard hint">Todavía no hay mecánicos registrados.</div>')+'</div>';
+}
+async function dsSave(el){
+  const m=$('#dsMec').value,v=$('#dsVol').value;
+  await busy(el,'Guardando…',async()=>{
+    try{const j=await api('saveDiscounts',{mecanico:m,volumen:v});A.desc=j.descuentos;A.dirty=true;$('#dsMsg').textContent='Guardado ✓'}
+    catch(e){failToast(e)}
+  });
+}
+async function saveDepDesc(inp){
+  const v=inp.value.trim();inp.disabled=true;
+  try{await api('saveDep',{nombre:inp.dataset.d,descuento:v});A.dirty=true;toast(inp.dataset.d+(v&&Number(v)>0?': '+Number(v)+' % de descuento':': sin descuento'))}
+  catch(e){failToast(e);const d=A.deps.departamentos.find(x=>x.nombre===inp.dataset.d);inp.value=d&&d.descuento>0?d.descuento:''}
+  inp.disabled=false;
+}
+function openMecEd(codigo){
+  const m=codigo?A.mecs.find(x=>x.codigo===codigo):null;A.editMec=m?m.codigo:null;
+  $('#meTitle').textContent=m?'Editar mecánico':'Nuevo mecánico';
+  $('#meCod').value=m?m.codigo:'';$('#meCod').readOnly=!!m;
+  $('#meGen').style.display=m?'none':'';$('#meScan').style.display=m?'none':'';
+  $('#meNom').value=m?m.nombre:'';$('#meTel').value=m?m.telefono:'';$('#meAct').checked=m?m.activo:true;$('#meErr').textContent='';
+  openM('#mMecEd');
+}
+$('#mecForm').addEventListener('submit',async e=>{
+  e.preventDefault();const err=$('#meErr');err.textContent='';
+  const data={nuevo:!A.editMec,codigo:$('#meCod').value.trim(),nombre:$('#meNom').value.trim(),telefono:$('#meTel').value.trim(),activo:$('#meAct').checked};
+  await busy($('#meOk'),'Guardando…',async()=>{
+    try{await api('saveMechanic',data);closeM('#mMecEd');toast('Mecánico guardado');if(A.tab==='des')admDesc()}
+    catch(er){if(er.code!=='SESION')err.textContent=errMsg(er)}
+  });
+});
+$('#meCancel').addEventListener('click',()=>closeM('#mMecEd'));
+$('#meScan').addEventListener('click',()=>openScanner(code=>{$('#meCod').value=String(code).trim()}));
+$('#meGen').addEventListener('click',()=>{
+  let c;do{c='MEC-'+String(Math.floor(Math.random()*90000)+10000)}while((A.mecs||[]).some(m=>m.codigo.toUpperCase()===c));
+  $('#meCod').value=c;
+});
 
 /* ---------- Usuarios ---------- */
 async function admUsers(){
@@ -1271,6 +1395,9 @@ const ACT={
     if(existe&&!confirm('Ya existe "'+nn+'". ¿Unir los productos de "'+nombre+'" con ese departamento?'))return;
     try{await api('saveDep',{nombre:nombre,nuevoNombre:nn});A.dirty=true;await loadCatalog();admDeps()}catch(e){failToast(e)}
   },
+  dsSave(el){return dsSave(el)},
+  mecNew(){openMecEd(null)},
+  mecEdit(el){openMecEd(el.dataset.c)},
   usNew(){openUser(null)},
   usEdit(el){openUser(el.dataset.u)},
   preCalc(el){return prevCalc(el)},
@@ -1292,6 +1419,7 @@ admBody().addEventListener('change',e=>{
   else if(t.id==='batchFile'){const f=t.files;admBatch(f);t.value=''}
   else if(t.id==='pvG'){renderPrevList()}
   else if(t.classList&&t.classList.contains('elchk')){toggleEl(t)}
+  else if(t.classList&&t.classList.contains('depdesc')){saveDepDesc(t)}
 });
 admBody().addEventListener('click',e=>{
   const el=e.target.closest('[data-act]');
@@ -1380,12 +1508,16 @@ function buildTicket(v,cfg){
   if(v.corregido)k.text('TICKET CORREGIDO',20,{bold:1,align:'center'});
   k.text(fdmy(v.fecha)+' '+String(v.hora||'').slice(0,5),18,{align:'center'});
   if(v.vendedor)k.text('Atendió: '+v.vendedor,18,{align:'center'});
+  if(v.mecanico)k.text('Mecánico: '+v.mecanico,18,{align:'center'});
   k.rule(true);
   let hayElec=false;
   (v.items||[]).forEach(it=>{
     k.text(String(it.desc||it.codigo)+(it.electrico?' *':''),20,{bold:1});
     if(it.electrico)hayElec=true;
-    k.pair(it.qty+' x '+fmt(it.precio),fmt(it.importe),20);
+    if(it.descPct>0&&it.lista>it.precio){
+      k.pair(it.qty+' x '+fmt(it.lista),fmt(r2(it.lista*it.qty)),20);
+      k.pair('  Desc. '+it.descTipo+' '+it.descPct+'%','-'+fmt(r2(it.lista*it.qty-it.importe)),16);
+    }else k.pair(it.qty+' x '+fmt(it.precio),fmt(it.importe),20);
   });
   k.rule(true);
   k.pair('TOTAL',fmt(v.total),30,{bold:1});
@@ -1663,7 +1795,7 @@ document.addEventListener('keydown',e=>{
   if(S.admOpen)admClose();
 });
 // Puntos de enganche para las partes siguientes (administración, ticket, devoluciones...)
-window.POS={S:S,api:api,toast:toast,esc:esc,fmt:fmt,norm:norm,openM:openM,closeM:closeM,loadCatalog:loadCatalog,renderAll:renderAll,fotoUrl:fotoUrl,handleCode:handleCode,code128Widths:code128Widths,buildTicket:buildTicket,buildNota:buildNota,ticketRaster:ticketRaster,phomemoJob:phomemoJob};
+window.POS={S:S,api:api,toast:toast,esc:esc,fmt:fmt,norm:norm,openM:openM,closeM:closeM,loadCatalog:loadCatalog,renderAll:renderAll,fotoUrl:fotoUrl,handleCode:handleCode,code128Widths:code128Widths,buildTicket:buildTicket,buildNota:buildNota,lineCalc:lineCalc,ticketRaster:ticketRaster,phomemoJob:phomemoJob};
 
 /* ===================================================================
    ARRANQUE
