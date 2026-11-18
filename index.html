@@ -177,6 +177,15 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
 .dhead .f{font-size:22px;font-weight:800}
 .dsum{font-weight:700;margin:10px 0}
 .ncok{color:var(--ok)}
+.fbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
+.chipf{border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;min-height:38px}
+.chipf.on{border-color:var(--brand);color:var(--brand)}
+.fpanel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;background:var(--soft);border-radius:12px;padding:10px;margin-bottom:8px}
+.fpanel[hidden]{display:none}
+.fpanel label{font-size:12px;color:var(--muted);display:block;margin-bottom:2px}
+.fpanel input,.fpanel select{background:var(--card)}
+.fpanel .full{grid-column:1/-1}
+#fRel{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin:6px 0}
 .arow.depr{flex-wrap:wrap}
 .arow.depr .mid{flex:1 1 130px}
 .tag.ok{color:var(--ok);border-color:var(--ok)}
@@ -245,6 +254,13 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
           <button class="iconbtn" id="btnScan" title="Escanear código de barras o QR" aria-label="Escanear código">📷</button>
           <select id="dep" aria-label="Departamento"></select>
         </div>
+        <div class="fbar"><button class="chipf" id="btnFilt" type="button" aria-expanded="false" aria-controls="fPanel">⚙ Filtros<span id="fCount"></span></button><button class="mini" id="fClear" type="button" hidden>Limpiar filtros</button></div>
+        <div class="fpanel" id="fPanel" hidden>
+          <div class="full"><label for="fMoto">Moto (modelo; no tiene que ser exacto)</label><input id="fMoto" placeholder="Ej. FT150, XVE 150, CG125" autocomplete="off" autocapitalize="off"></div>
+          <div><label for="fAnio">Año</label><input id="fAnio" type="number" inputmode="numeric" min="1950" max="2100" placeholder="Ej. 2019"></div>
+          <div><label for="fOrigen">Tipo de pieza</label><select id="fOrigen"><option value="">Originales y genéricas</option><option value="ORIGINAL">Solo originales</option><option value="GENERICO">Solo genéricas</option></select></div>
+          <div class="full"><label for="fCamara">Llantas</label><select id="fCamara"><option value="">Con o sin cámara</option><option value="SI">Usan cámara</option><option value="NO">Sin cámara (tubeless)</option></select></div>
+        </div>
         <div class="hint" id="resInfo"></div>
         <div class="grid" id="grid"></div>
       </section>
@@ -272,6 +288,7 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
   <h2 id="fDesc"></h2>
   <div id="fTags"></div>
   <dl class="kv" id="fKv"></dl>
+  <div id="fRel"></div>
   <div class="row" style="margin-top:12px">
     <button class="btn sec" id="fClose">Cerrar</button>
     <button class="btn" id="fAdd">Agregar a la venta</button>
@@ -476,6 +493,10 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
     <div><label for="epDep">Departamento</label><input id="epDep" list="dlDeps" autocomplete="off"></div>
     <div><label for="epPz">Piezas por unidad</label><input id="epPz" type="number" min="1" step="1" inputmode="numeric"></div>
     <div><label for="epFijo">Proveedor fijo</label><select id="epFijo"></select></div>
+    <div style="grid-column:1/-1"><label for="epMotos">Motos compatibles (para el filtro)</label><textarea id="epMotos" rows="3" placeholder="ITALIKA FT150 2012-2022; VENTO XVE 150 2018+   (escribe UNIVERSAL si sirve para todas)"></textarea></div>
+    <div style="grid-column:1/-1"><label for="epEquiv">Códigos originales equivalentes</label><input id="epEquiv" autocomplete="off" placeholder="Separados con coma. Así aparece al buscar el código original"></div>
+    <div><label for="epOrigen">Tipo de pieza</label><select id="epOrigen"><option value="">Automático (por proveedor)</option><option value="ORIGINAL">Original</option><option value="GENERICO">Genérica</option></select></div>
+    <div><label for="epCamara">Llantas: cámara</label><select id="epCamara"><option value="">No aplica</option><option value="SI">Usan cámara</option><option value="NO">Sin cámara</option></select></div>
   </div>
   <datalist id="dlDeps"></datalist>
   <div class="hint" id="epInfo"></div>
@@ -540,7 +561,7 @@ const fdmy=s=>{const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?
    ESTADO
    =================================================================== */
 const S={url:'',token:'',user:null,config:{},prods:[],byCode:{},cat:'',q:'',cart:[],pay:'Efectivo',
-  auth:null,authAt:0,busy:false,fichaCode:null,priceCode:null,lastSale:null,nc:null,mec:null,descCfg:{mecanico:0,volumen:0,volMin:16,deps:{}}};
+  auth:null,authAt:0,busy:false,fichaCode:null,priceCode:null,lastSale:null,nc:null,mec:null,f:{moto:'',anio:'',origen:'',camara:''},descCfg:{mecanico:0,volumen:0,volMin:16,deps:{}}};
 const AUTH_MS=170000; // el servidor la da por 180 s; aquí un margen
 const MAX_SHOW=200;
 
@@ -629,7 +650,11 @@ async function loadCatalog(){
   S.prods=j.productos||[];S.config=j.config||S.config;
   S.descCfg=j.descuentos||S.descCfg;
   S.byCode={};
-  S.prods.forEach(p=>{p._n=norm(p.desc+' '+p.codigo+' '+p.depto);S.byCode[String(p.codigo).toUpperCase()]=p});
+  S.prods.forEach(p=>{p.equiv=Array.isArray(p.equiv)?p.equiv:[];p._mt=parseMotos(p.motos);p._rel=[];S.byCode[String(p.codigo).toUpperCase()]=p});
+  // equivalencias: un producto genérico y su código original (si también está en el inventario) se encuentran el uno al otro
+  const link=(a,b)=>{if(a._rel.indexOf(b)<0)a._rel.push(b)};
+  S.prods.forEach(p=>p.equiv.forEach(c=>{const q=S.byCode[String(c).toUpperCase()];if(q&&q!==p){link(p,q);link(q,p)}}));
+  S.prods.forEach(p=>{p._n=norm([p.desc,p.codigo,p.depto,p.motos,p.equiv.join(' '),p._rel.map(q=>q.codigo).join(' ')].join(' '))});
   // el carrito se ajusta a lo que haya ahora en existencia
   S.cart=S.cart.filter(l=>{const p=S.byCode[l.codigo.toUpperCase()];if(!p)return false;if(l.qty>p.existencia)l.qty=p.existencia;return l.qty>0});
   const cnt={};S.prods.forEach(p=>{const d=p.depto||'(sin departamento)';cnt[d]=(cnt[d]||0)+1});
@@ -646,23 +671,61 @@ $('#btnRefresh').addEventListener('click',async()=>{
 /* ===================================================================
    VENTA · búsqueda y cuadrícula
    =================================================================== */
+// "Motos compatibles": entradas separadas con ; — ej. "ITALIKA FT150 2012-2022; VENTO XVE 150 2018+; UNIVERSAL"
+function parseMotos(txt){
+  const out=[];
+  String(txt||'').split(/[;\n]+/).forEach(seg=>{
+    let t=norm(seg).trim();if(!t)return;
+    if(/^(universal|todas?|todos?)$/.test(t)){out.push({u:true});return}
+    let y1=null,y2=null,m;
+    if((m=t.match(/((?:19|20)\d{2})\s*(?:-|a|al|hasta)\s*((?:19|20)\d{2})/))){y1=+m[1];y2=+m[2];t=t.replace(m[0],' ')}
+    else if((m=t.match(/((?:19|20)\d{2})\s*(?:\+|-\s*$|en adelante|y mas|y posteriores)/))){y1=+m[1];y2=9999;t=t.replace(m[0],' ')}
+    else if((m=t.match(/\b((?:19|20)\d{2})\b/))){y1=y2=+m[1];t=t.replace(m[0],' ')}
+    out.push({m:t.replace(/[^a-z0-9]/g,''),y1:y1,y2:y2});
+  });
+  return out;
+}
+function motoFilter(){
+  const f=S.f;let moto=norm(f.moto);let anio=parseInt(f.anio,10);
+  const ym=moto.match(/\b((?:19|20)\d{2})\b/);
+  if(!(anio>=1900&&anio<=2100))anio=ym?+ym[1]:null;
+  moto=moto.replace(/\b(?:19|20)\d{2}\b/g,' ');
+  const tokens=moto.split(/\s+/).map(w=>w.replace(/[^a-z0-9]/g,'')).filter(Boolean);
+  return {tokens:tokens,anio:anio,on:tokens.length>0||anio!=null};
+}
+// coincidencia flexible: basta con que cada palabra escrita aparezca en el modelo ("ft 150" encuentra "FT150");
+// el año cuenta si cae dentro del rango de la pieza (o si la pieza no trae años)
+function motoMatch(p,f){
+  const mt=p._mt;if(!mt||!mt.length)return false;
+  return mt.some(e=>{
+    if(e.u)return true;
+    if(f.tokens.length&&!f.tokens.every(t=>e.m.indexOf(t)>=0))return false;
+    if(f.anio!=null&&e.y1!=null&&!(f.anio>=e.y1&&f.anio<=e.y2))return false;
+    return true;
+  });
+}
+function filtrosActivos(){const f=S.f;return (f.moto.trim()?1:0)+(String(f.anio).trim()?1:0)+(f.origen?1:0)+(f.camara?1:0)}
 function filtrar(){
-  const words=norm(S.q).split(/\s+/).filter(Boolean);
+  const words=norm(S.q).split(/\s+/).filter(Boolean);const mf=motoFilter();const f=S.f;
   return S.prods.filter(p=>{
     if(S.cat){const d=p.depto||'(sin departamento)';if(d!==S.cat)return false}
+    if(f.origen&&p.origen!==f.origen)return false;
+    if(f.camara&&p.camara!==f.camara)return false;
+    if(mf.on&&!motoMatch(p,mf))return false;
     return words.every(w=>p._n.indexOf(w)>=0);
   });
 }
 function renderGrid(){
-  const list=filtrar();const admin=S.user&&S.user.rol==='admin';
-  $('#resInfo').textContent=list.length>MAX_SHOW?('Mostrando '+MAX_SHOW+' de '+list.length+'. Escribe más para afinar la búsqueda.'):(list.length+' producto'+(list.length===1?'':'s'));
+  const list=filtrar();const admin=S.user&&S.user.rol==='admin';const nf=filtrosActivos();
+  $('#fCount').textContent=nf?' ('+nf+')':'';$('#btnFilt').classList.toggle('on',nf>0);$('#fClear').hidden=nf===0;
+  $('#resInfo').textContent=(list.length>MAX_SHOW?('Mostrando '+MAX_SHOW+' de '+list.length+'. Escribe más para afinar la búsqueda.'):(list.length+' producto'+(list.length===1?'':'s')))+(nf?' · con filtros':'');
   if(!list.length){$('#grid').innerHTML='<div class="empty">No hay productos con esa búsqueda.</div>';return}
   $('#grid').innerHTML=list.slice(0,MAX_SHOW).map(p=>{
     const out=p.existencia<=0||!(p.precio>0);
     return '<div class="prod'+(out?' out':'')+(admin&&p.alerta?' warn':'')+'" data-c="'+esc(p.codigo)+'" role="button" tabindex="0">'+
       '<div class="ph">'+(p.foto?'<img class="phimg" loading="lazy" src="'+esc(fotoUrl(p.foto,240))+'" alt="">':'')+'<span class="ini">'+esc((p.desc||'?').trim().charAt(0).toUpperCase())+'</span></div>'+
       '<b class="nm">'+esc(p.desc)+'</b>'+
-      '<small>'+esc(p.codigo)+(p.electrico?' <span class="tag el">Eléctrico</span>':'')+'</small>'+
+      '<small>'+esc(p.codigo)+(p.electrico?' <span class="tag el">Eléctrico</span>':'')+(p.origen==='ORIGINAL'?' <span class="tag">Original</span>':(p.origen==='GENERICO'?' <span class="tag">Genérica</span>':''))+(p.camara==='SI'?' <span class="tag">Con cámara</span>':(p.camara==='NO'?' <span class="tag">Sin cámara</span>':''))+'</small>'+
       '<div class="pr"><span>'+(p.precio>0?fmt(p.precio):'Sin precio')+'</span><button class="add" data-add="'+esc(p.codigo)+'" '+(out?'disabled':'')+' aria-label="Agregar">+</button></div>'+
       '<small>'+(p.existencia<=0?'Agotado':'Existencia: '+p.existencia)+'</small>'+
       (admin&&p.alerta?'<span class="tag red">Precio bajo costo</span>':'')+
@@ -681,6 +744,13 @@ $('#q').addEventListener('keydown',e=>{
   if(p){addToCart(p.codigo);$('#q').value='';S.q='';renderGrid()}
 });
 $('#dep').addEventListener('change',e=>{S.cat=e.target.value;renderGrid()});
+// ----- panel de filtros
+let fT;
+$('#btnFilt').addEventListener('click',()=>{const h=$('#fPanel').hidden;$('#fPanel').hidden=!h;$('#btnFilt').setAttribute('aria-expanded',String(h));if(h)setTimeout(()=>{try{if(window.matchMedia('(pointer:fine)').matches)$('#fMoto').focus()}catch(e){}},30)});
+const fSync=()=>{S.f={moto:$('#fMoto').value,anio:$('#fAnio').value,origen:$('#fOrigen').value,camara:$('#fCamara').value}};
+['#fMoto','#fAnio'].forEach(id=>$(id).addEventListener('input',()=>{fSync();clearTimeout(fT);fT=setTimeout(renderGrid,150)}));
+['#fOrigen','#fCamara'].forEach(id=>$(id).addEventListener('change',()=>{fSync();renderGrid()}));
+$('#fClear').addEventListener('click',()=>{$('#fMoto').value='';$('#fAnio').value='';$('#fOrigen').value='';$('#fCamara').value='';fSync();renderGrid()});
 $('#grid').addEventListener('click',e=>{
   const add=e.target.closest('[data-add]');
   if(add){addToCart(add.dataset.add);return}
@@ -829,13 +899,19 @@ function openFicha(code){
   $('#fTags').innerHTML=(p.electrico?'<span class="tag el">Parte eléctrica: sin cambios ni devoluciones</span>':'')+(admin&&p.alerta?' <span class="tag red">Precio bajo costo</span>':'');
   const rows=[['Código',p.codigo],['Precio',p.precio>0?fmt(p.precio):'Sin precio'],['Existencia',p.existencia],['Ubicación',p.ubicacion||'—'],['Departamento',p.depto||'—']];
   if(p.pzas>1)rows.push(['Piezas por unidad',p.pzas]);
+  if(p.origen)rows.push(['Tipo',p.origen==='ORIGINAL'?'Original':'Genérica']);
+  if(p.camara)rows.push(['Llanta',p.camara==='SI'?'Usa cámara':'Sin cámara (tubeless)']);
+  if(p.motos)rows.push(['Compatible con',p.motos]);
+  if(p.equiv&&p.equiv.length)rows.push(['Códigos originales',p.equiv.join(', ')]);
   if(admin){rows.push(['Costo proveedor',p.costo===''||p.costo==null?'—':fmt(p.costo)]);rows.push(['Proveedor',p.proveedor||'—'])}
   $('#fKv').innerHTML=rows.map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join('');
+  $('#fRel').innerHTML=(p._rel||[]).map(q=>'<button class="mini" type="button" data-rel="'+esc(q.codigo)+'">Ver equivalente: '+esc(q.codigo)+' · '+esc(q.desc)+(q.origen==='ORIGINAL'?' (original)':(q.origen==='GENERICO'?' (genérica)':''))+'</button>').join('');
   const ok=p.existencia>0&&p.precio>0;
   $('#fAdd').disabled=!ok;$('#fAdd').textContent=ok?'Agregar a la venta':(p.existencia<=0?'Agotado':'Sin precio');
   openM('#mFicha');
 }
 $('#fClose').addEventListener('click',()=>closeM('#mFicha'));
+$('#fRel').addEventListener('click',e=>{const b=e.target.closest('[data-rel]');if(b)openFicha(b.dataset.rel)});
 $('#fAdd').addEventListener('click',()=>{if(addToCart(S.fichaCode))closeM('#mFicha')});
 $('#fPhoto').addEventListener('click',()=>{const id=$('#fPhoto').dataset.foto;if(!id)return;$('#phImg').src=fotoUrl(id,1600);openM('#mPhoto')});
 $('#phClose').addEventListener('click',()=>{closeM('#mPhoto');$('#phImg').removeAttribute('src')});
@@ -1191,6 +1267,7 @@ function admEdit(code,isNew){
   $('#epEx').value=p?p.existencia:0;$('#epUb').value=p?p.ubicacion:'';$('#epDep').value=p?p.depto:'';$('#epPz').value=p?p.pzas:1;
   $('#epFijo').innerHTML='<option value="">(ninguno)</option>'+PROVS.map(v=>'<option'+(p&&String(p.fijo||'').toUpperCase()===v?' selected':'')+'>'+v+'</option>').join('');
   $('#dlDeps').innerHTML=Array.from(new Set(S.prods.map(x=>x.depto).filter(Boolean))).sort().map(d=>'<option value="'+esc(d)+'">').join('');
+  $('#epMotos').value=p?(p.motos||''):'';$('#epEquiv').value=p?(p.equiv||[]).join(', '):'';$('#epOrigen').value=p?(p.origenManual||''):'';$('#epCamara').value=p?(p.camara||''):'';
   $('#epPhotoBox').hidden=!!isNew;
   $('#epPhoto').innerHTML='<span class="ini">'+esc(p?(p.desc||'?').trim().charAt(0).toUpperCase():'+')+'</span>'+(p&&p.foto?'<img src="'+esc(fotoUrl(p.foto,600))+'" alt="">':'');
   $('#epPhotoMsg').textContent=isNew?'Guarda el producto primero; después podrás agregar su foto.':'';
@@ -1207,7 +1284,7 @@ async function admSaveProd(){
   if(pz===''||!/^\d+$/.test(pz)||Number(pz)<1){err.textContent='Piezas por unidad: un entero de 1 o más.';return}
   if(pmRaw!==''&&(isNaN(Number(pmRaw))||Number(pmRaw)<0)){err.textContent='El precio manual no es válido.';return}
   if(A.editNew&&!(Number(pmRaw)>0)){err.textContent='Un producto nuevo necesita un precio manual mayor a 0.';return}
-  const data={codigo:cod,existencia:Number(ex),ubicacion:$('#epUb').value.trim(),depto:$('#epDep').value.trim(),pzas:Number(pz),fijo:$('#epFijo').value,pmanual:pmRaw===''?'':Number(pmRaw)};
+  const data={codigo:cod,existencia:Number(ex),ubicacion:$('#epUb').value.trim(),depto:$('#epDep').value.trim(),pzas:Number(pz),fijo:$('#epFijo').value,pmanual:pmRaw===''?'':Number(pmRaw),motos:$('#epMotos').value.trim(),equiv:$('#epEquiv').value.trim(),origen:$('#epOrigen').value,camara:$('#epCamara').value};
   if(A.editNew){data.nuevo=true;data.dmanual=desc}
   else{const p=getP(A.editCode);if(p&&desc!==p.desc)data.dmanual=desc}
   await busy($('#epSave'),'Guardando…',async()=>{
