@@ -527,7 +527,10 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
   <img class="lbl" id="etImg" alt="Vista previa de la etiqueta" width="320" height="240">
   <div class="row"><div><label for="etCopies">Copias</label><input id="etCopies" type="number" inputmode="numeric" min="1" max="50" value="1"></div>
     <div><label for="etDens">Intensidad</label><select id="etDens"><option value="6">Clara</option><option value="10" selected>Normal</option><option value="15">Oscura</option></select></div></div>
-  <div class="hint" id="etMsg" role="status"></div>
+  <details style="margin-top:6px"><summary class="hint" style="cursor:pointer">Opciones avanzadas (si no imprime)</summary>
+    <div class="row" style="margin-top:6px"><div><label for="etModo">Envío</label><select id="etModo"><option value="rapido">Rápido (normal)</option><option value="seguro">Seguro (con confirmación)</option></select></div>
+    <div><label for="etAncho">Ancho de impresión</label><select id="etAncho"><option value="320">40 mm (normal)</option><option value="384">48 mm (centrado)</option></select></div></div></details>
+  <div class="hint" id="etMsg" role="status" style="overflow-wrap:anywhere"></div>
   <button class="btn" id="etBt" type="button" style="margin-top:6px">🖨 Imprimir por Bluetooth</button>
   <div class="row" style="margin-top:6px"><button class="btn sec" id="etShare" type="button">Compartir / guardar imagen</button><button class="btn sec" id="etVale" type="button" hidden>Comprobante</button></div>
   <button class="btn sec" id="etClose" type="button" style="margin-top:6px">Cerrar</button>
@@ -1961,17 +1964,58 @@ function lblApartado(a){
   });
 }
 // Protocolo de la Phomemo M110 (etiquetas con espacio): velocidad, intensidad, tipo de papel 0x0a, imagen y cierre
-function phomemoJobM110(c,copies,dens){
-  const rb=c.width>>3,h=c.height,r=ticketRaster(c),parts=[];
+function m110Canvas(c,ancho){ // 48 mm: la etiqueta de 40 mm se centra en el cabezal de 384 puntos
+  if(ancho!=='384'||c.width>=384)return c;
+  const o=document.createElement('canvas');o.width=384;o.height=c.height;const x=o.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,384,c.height);x.drawImage(c,(384-c.width)>>1,0);return o;
+}
+function phomemoPartsM110(c,copies,dens,ancho){
+  c=m110Canvas(c,ancho);const rb=c.width>>3,h=c.height,r=ticketRaster(c),parts=[];
   const d=Math.max(1,Math.min(15,parseInt(dens,10)||10));
   for(let k=0;k<Math.max(1,copies|0);k++){
     parts.push(Uint8Array.from([0x1b,0x4e,0x0d,0x05,0x1b,0x4e,0x04,d,0x1f,0x11,0x0a]));
     for(let y0=0;y0<h;y0+=255){const n=Math.min(255,h-y0);parts.push(Uint8Array.from([0x1d,0x76,0x30,0x00,rb&255,rb>>8,n&255,n>>8]));parts.push(r.subarray(y0*rb,(y0+n)*rb))}
     parts.push(Uint8Array.from([0x1f,0xf0,0x05,0x00,0x1f,0xf0,0x03,0x00]));
   }
+  return parts;
+}
+function phomemoJobM110(c,copies,dens,ancho){
+  const parts=phomemoPartsM110(c,copies,dens,ancho);
   const len=parts.reduce((a,p)=>a+p.length,0),all=new Uint8Array(len);let o=0;parts.forEach(p=>{all.set(p,o);o+=p.length});return all;
 }
-window.POSLBL={lblProducto,lblApartado,phomemoJobM110};
+const hex2=v=>Array.from(new Uint8Array(v.buffer?v.buffer.slice(v.byteOffset,v.byteOffset+v.byteLength):v)).map(b=>('0'+b.toString(16)).slice(-2)).join(' ');
+// Envía a la M110: se suscribe a los avisos (ff03), manda cada bloque por separado con una pausa y reporta qué contestó la impresora
+async function m110Send(ch,parts,modo,onProgress){
+  const info={canal:String(ch.uuid||'').slice(4,8),via:'',avisos:[],trozo:0};
+  try{
+    if(!ch._noti){
+      const nc=await ch.service.getCharacteristic('0000ff03-0000-1000-8000-00805f9b34fb');
+      nc.addEventListener('characteristicvaluechanged',e=>{try{(ch._avisos=ch._avisos||[]).push(hex2(e.target.value))}catch(er){}});
+      await nc.startNotifications();ch._noti=nc;
+    }
+  }catch(e){info.sinAvisos=true}
+  ch._avisos=[];
+  const props=ch.properties||{};
+  const conResp=modo==='seguro'&&props.write&&typeof ch.writeValueWithResponse==='function';
+  const sinResp=!conResp&&props.writeWithoutResponse&&typeof ch.writeValueWithoutResponse==='function';
+  info.via=conResp?'con confirmación':(sinResp?'sin confirmación':'estándar');
+  let size=conResp?100:128;const total=parts.reduce((a,p)=>a+p.length,0);let sent=0;
+  const wr=async v=>{if(conResp)await ch.writeValueWithResponse(v);else if(sinResp)await ch.writeValueWithoutResponse(v);else await ch.writeValue(v)};
+  for(const part of parts){
+    let i=0;
+    while(i<part.length){
+      const piece=part.slice(i,i+size);
+      try{await wr(piece)}catch(e){if(size>20){size=20;continue}throw e}
+      i+=piece.length;sent+=piece.length;info.trozo=size;
+      if(onProgress)onProgress(Math.min(100,Math.round(sent*100/total)));
+      await sleep(conResp?5:15);
+    }
+    await sleep(60);
+  }
+  await sleep(700);
+  info.avisos=(ch._avisos||[]).slice(0,6);
+  return info;
+}
+window.POSLBL={lblProducto,lblApartado,phomemoJobM110,phomemoPartsM110};
 
 const ET={mode:'',prod:null,apt:null,canvas:null,busy:false};
 const etMsg=(m,bad)=>{const e=$('#etMsg');e.textContent=m||'';e.style.color=bad?'var(--danger)':''};
@@ -2021,17 +2065,22 @@ $('#etBt').addEventListener('click',async()=>{
   try{
     const copies=Math.max(1,Math.min(50,parseInt($('#etCopies').value,10)||1));
     const ch=await btConnect();
-    const job=phomemoJobM110(ET.canvas,copies,$('#etDens').value);
-    etMsg('Imprimiendo… 0 %');await btWrite(ch,job,pr=>etMsg('Imprimiendo… '+pr+' %'));
-    etMsg('Enviado a la impresora ✓ ('+copies+' etiqueta'+(copies===1?'':'s')+')');
+    const parts=phomemoPartsM110(ET.canvas,copies,$('#etDens').value,$('#etAncho').value);
+    etMsg('Imprimiendo… 0 %');
+    const info=await m110Send(ch,parts,$('#etModo').value,pr=>etMsg('Imprimiendo… '+pr+' %'));
+    etMsg('Enviado a la impresora ✓ ('+copies+' etiqueta'+(copies===1?'':'s')+'). Detalle: canal '+info.canal+', '+info.via+', trozos de '+info.trozo+' bytes, '+(info.sinAvisos?'sin canal de avisos':(info.avisos.length?'la impresora contestó: '+info.avisos.join(' | '):'la impresora no contestó nada'))+'.');
   }catch(e){
     const n=e&&e.name;
     if(n==='NotFoundError')etMsg('No se eligió ninguna impresora.',true);
-    else if(n==='NetworkError'||n==='InvalidStateError'){btChar=null;etMsg('Se perdió la conexión con la impresora. Enciéndela, acércala y vuelve a intentar.',true)}
+    else if(n==='NetworkError'||n==='InvalidStateError'){btChar=null;etMsg('Se perdió la conexión con la impresora. Enciéndela, acércala, cierra la app de Phomemo y vuelve a intentar.',true)}
     else if(n==='SecurityError')etMsg('El navegador no permitió el Bluetooth. Revisa los permisos.',true);
-    else etMsg((e&&e.message)||'No se pudo imprimir.',true);
+    else etMsg('Error: '+((e&&e.message)||'no se pudo imprimir')+'.',true);
   }
   ET.busy=false;btn.disabled=false;
+});
+['etModo','etAncho'].forEach(id=>{
+  try{const v=localStorage.getItem('pos_'+id);if(v)$('#'+id).value=v}catch(e){}
+  $('#'+id).addEventListener('change',()=>{try{localStorage.setItem('pos_'+id,$('#'+id).value)}catch(e){}});
 });
 
 /* ===================================================================
