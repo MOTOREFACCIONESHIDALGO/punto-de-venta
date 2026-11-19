@@ -177,6 +177,18 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
 .dhead .f{font-size:22px;font-weight:800}
 .dsum{font-weight:700;margin:10px 0}
 .ncok{color:var(--ok)}
+.badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:6px;border-radius:999px;background:var(--danger);color:#fff;font-size:11px;line-height:18px;text-align:center}
+.badge:empty{display:none}
+.encl{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)}
+.encl:last-child{border-bottom:0}
+.encl .qty{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.encl .qty button{min-width:36px;min-height:36px}
+.encmoney{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:8px 0;text-align:center}
+.encmoney div{background:var(--soft);border-radius:10px;padding:6px 4px;font-size:12px;color:var(--muted)}
+.encmoney b{display:block;font-size:15px;color:var(--text)}
+.encbanner{background:var(--soft);border:1px solid var(--ok);color:var(--ok);border-radius:12px;padding:10px;margin-bottom:10px;font-weight:600}
+.lbl{width:100%;border:1px solid var(--line);border-radius:6px;image-rendering:pixelated;background:#fff;margin:6px 0}
+.aprow{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:var(--card);width:100%;text-align:left}
 .fbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
 .chipf{border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;min-height:38px}
 .chipf.on{border-color:var(--brand);color:var(--brand)}
@@ -241,6 +253,8 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
     <span class="chip" id="whoami"></span>
     <button class="chip" id="btnRefresh" title="Actualizar catálogo" aria-label="Actualizar catálogo">↻</button>
     <button class="chip" id="btnDev">Devoluciones</button>
+    <button class="chip" id="btnApt">Apartados</button>
+    <button class="chip" id="btnEnc" aria-label="Encargos y cotizaciones">Encargos<span class="badge" id="encBadge"></span></button>
     <button class="chip" id="btnAdmin" hidden>Administración</button>
     <button class="chip" id="btnLogout">Salir</button>
   </header>
@@ -289,6 +303,7 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
   <div id="fTags"></div>
   <dl class="kv" id="fKv"></dl>
   <div id="fRel"></div>
+  <button class="btn sec" id="fEtq" type="button" style="margin-top:10px">🏷 Imprimir etiqueta</button>
   <div class="row" style="margin-top:12px">
     <button class="btn sec" id="fClose">Cerrar</button>
     <button class="btn" id="fAdd">Agregar a la venta</button>
@@ -472,6 +487,52 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
   <div class="admbody" id="admBody"></div>
 </div>
 
+<!-- ============ ENCARGOS Y COTIZACIONES (todos los usuarios) ============ -->
+<div id="enc" class="adm" hidden>
+  <div class="admtop"><b>Encargos y cotizaciones</b><button class="chip" id="encX">Cerrar ✕</button></div>
+  <nav class="admtabs" id="encTabs">
+    <button data-t="nuevo" class="on">Nuevo encargo</button>
+    <button data-t="pend">Pendientes<span class="badge" id="encTabBadge"></span></button>
+  </nav>
+  <div class="admbody" id="encBody"></div>
+</div>
+<div class="modal" id="mEncPay" role="dialog" aria-modal="true"><form class="sheet" id="encPayForm" autocomplete="off">
+  <h2 id="epyTitle">Abono</h2>
+  <div class="hint" id="epyInfo"></div>
+  <label for="epyMonto" id="epyMontoL">Monto</label><input id="epyMonto" type="number" inputmode="decimal" min="0" step="0.01">
+  <label for="epyMetodo" id="epyMetodoL">Forma de pago</label><select id="epyMetodo"><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option></select>
+  <div id="epyCash"><label for="epyRecv">Efectivo recibido</label><input id="epyRecv" type="number" inputmode="decimal" min="0" step="0.01"><div class="change" id="epyChange"></div></div>
+  <div class="err" id="epyErr" role="alert"></div>
+  <div class="row" style="margin-top:10px"><button class="btn sec" id="epyCancel" type="button">Cancelar</button><button class="btn" id="epyOk" type="submit">Confirmar</button></div>
+</form></div>
+
+<!-- ============ APARTADOS (todos los usuarios) ============ -->
+<div id="apt" class="adm" hidden>
+  <div class="admtop"><b>Apartados</b><button class="chip" id="aptX">Cerrar ✕</button></div>
+  <nav class="admtabs" id="aptTabs">
+    <button data-t="nuevo" class="on">Nuevo apartado</button>
+    <button data-t="lista">Abiertos</button>
+  </nav>
+  <div class="admbody" id="aptBody"></div>
+</div>
+<!-- ETIQUETAS 40×30 mm (Phomemo M110) -->
+<div class="modal" id="mEtq" role="dialog" aria-modal="true"><div class="sheet" style="max-width:440px">
+  <h2 id="etTitle">Etiqueta</h2>
+  <div id="etEdit" hidden>
+    <label for="etDesc">Descripción de la etiqueta (breve)</label>
+    <textarea id="etDesc" rows="2" maxlength="80" style="min-height:56px"></textarea>
+    <label class="chk"><input type="checkbox" id="etPrice"> Mostrar el precio</label>
+    <button class="btn sec" id="etSave" type="button" hidden style="margin-top:6px">Guardar esta descripción para siempre</button>
+  </div>
+  <img class="lbl" id="etImg" alt="Vista previa de la etiqueta" width="320" height="240">
+  <div class="row"><div><label for="etCopies">Copias</label><input id="etCopies" type="number" inputmode="numeric" min="1" max="50" value="1"></div>
+    <div><label for="etDens">Intensidad</label><select id="etDens"><option value="6">Clara</option><option value="10" selected>Normal</option><option value="15">Oscura</option></select></div></div>
+  <div class="hint" id="etMsg" role="status"></div>
+  <button class="btn" id="etBt" type="button" style="margin-top:6px">🖨 Imprimir por Bluetooth</button>
+  <div class="row" style="margin-top:6px"><button class="btn sec" id="etShare" type="button">Compartir / guardar imagen</button><button class="btn sec" id="etVale" type="button" hidden>Comprobante</button></div>
+  <button class="btn sec" id="etClose" type="button" style="margin-top:6px">Cerrar</button>
+</div></div>
+
 <!-- ADMIN: editar / crear producto -->
 <div class="modal" id="mProd" role="dialog" aria-modal="true"><div class="sheet" style="max-width:540px">
   <h2 id="epTitle">Producto</h2>
@@ -649,7 +710,7 @@ $('#btnLogout').addEventListener('click',async()=>{
 async function loadCatalog(){
   const j=await api('catalog');
   S.prods=j.productos||[];S.config=j.config||S.config;
-  S.descCfg=j.descuentos||S.descCfg;
+  S.descCfg=j.descuentos||S.descCfg;encBadge(j.encargosListos||0);
   S.byCode={};
   S.prods.forEach(p=>{p.equiv=Array.isArray(p.equiv)?p.equiv:[];p._mt=parseMotos(p.motos);p._rel=[];S.byCode[String(p.codigo).toUpperCase()]=p});
   // equivalencias: un producto genérico y su código original (si también está en el inventario) se encuentran el uno al otro
@@ -1265,7 +1326,7 @@ function admEdit(code,isNew){
   $('#epCod').value=p?p.codigo:'';$('#epCod').readOnly=!isNew;
   $('#epDesc').value=p?p.desc:'';
   $('#epPm').value=p&&Number(p.pmanual)>0?p.pmanual:'';
-  $('#epEx').value=p?p.existencia:0;$('#epUb').value=p?p.ubicacion:'';$('#epDep').value=p?p.depto:'';$('#epPz').value=p?p.pzas:1;
+  $('#epEx').value=p?(p.existReal!==undefined?p.existReal:p.existencia):0;$('#epUb').value=p?p.ubicacion:'';$('#epDep').value=p?p.depto:'';$('#epPz').value=p?p.pzas:1;
   $('#epFijo').innerHTML='<option value="">(ninguno)</option>'+PROVS.map(v=>'<option'+(p&&String(p.fijo||'').toUpperCase()===v?' selected':'')+'>'+v+'</option>').join('');
   $('#dlDeps').innerHTML=Array.from(new Set(S.prods.map(x=>x.depto).filter(Boolean))).sort().map(d=>'<option value="'+esc(d)+'">').join('');
   $('#epMotos').value=p?(p.motos||''):'';$('#epEquiv').value=p?(p.equiv||[]).join(', '):'';$('#epOrigen').value=p?(p.origenManual||''):'';$('#epCamara').value=p?(p.camara||''):'';
@@ -1450,13 +1511,13 @@ function pedRender(){
 }
 function pedList(){
   const l=pedFiltrados();
-  $('#pedList').innerHTML=l.length?l.map(x=>'<div class="arow nopoint"><div class="mid"><b>'+esc(x.codigo)+'</b> <span class="tag'+(x.tipo==='BAJO'?' red':'')+'">'+(x.tipo==='BAJO'?'Bajo stock':'Por traer')+'</span><small>'+esc(x.desc)+'</small>'+
-    '<small>'+(x.tipo==='BAJO'?('Quedan '+(x.existencia==null?'?':x.existencia)+' · vendidas desde el aviso: '+x.vendidas):('Traer: '+x.cantidad+(x.existencia==null?' · no está en el inventario':' · hay '+x.existencia)))+(x.proveedor?' · '+esc(x.proveedor):'')+(x.ubicacion?' · '+esc(x.ubicacion):'')+(x.nota?' · '+esc(x.nota):'')+'</small></div>'+
-    '<button class="btn sec auto" data-act="pedDel" data-c="'+esc(x.codigo)+'" data-t="'+esc(x.tipo)+'">Quitar</button></div>').join(''):'<div class="acard hint">No hay nada en esta lista.</div>';
+  $('#pedList').innerHTML=l.length?l.map(x=>'<div class="arow nopoint"><div class="mid"><b>'+esc(x.codigo)+'</b> <span class="tag'+(x.tipo==='BAJO'?' red':(x.tipo==='ENCARGO'?' ok':''))+'">'+(x.tipo==='BAJO'?'Bajo stock':(x.tipo==='ENCARGO'?'Encargo':'Por traer'))+'</span><small>'+esc(x.desc)+'</small>'+
+    '<small>'+(x.tipo==='BAJO'?('Quedan '+(x.existencia==null?'?':x.existencia)+' · vendidas desde el aviso: '+x.vendidas):(x.tipo==='ENCARGO'?'Traer: '+x.cantidad+' · el cliente ya dejó anticipo':'Traer: '+x.cantidad+(x.existencia==null?' · no está en el inventario':' · hay '+x.existencia)))+(x.proveedor?' · '+esc(x.proveedor):'')+(x.ubicacion?' · '+esc(x.ubicacion):'')+(x.nota?' · '+esc(x.nota):'')+'</small></div>'+
+    (x.tipo==='ENCARGO'?'':'<button class="btn sec auto" data-act="pedDel" data-c="'+esc(x.codigo)+'" data-t="'+esc(x.tipo)+'">Quitar</button>')+'</div>').join(''):'<div class="acard hint">No hay nada en esta lista.</div>';
 }
 function pedTexto(){
   const l=pedFiltrados();const g={};l.forEach(x=>{(g[x.proveedor||'(sin proveedor)']=g[x.proveedor||'(sin proveedor)']||[]).push(x)});
-  return Object.keys(g).sort((a,b)=>a.localeCompare(b,'es')).map(k=>k+'\n'+g[k].map(x=>'- '+x.codigo+' · '+x.desc+(x.tipo==='POR TRAER'?' · traer '+x.cantidad:' · vendidas '+x.vendidas+' (quedan '+(x.existencia==null?'?':x.existencia)+')')).join('\n')).join('\n\n');
+  return Object.keys(g).sort((a,b)=>a.localeCompare(b,'es')).map(k=>k+'\n'+g[k].map(x=>'- '+x.codigo+' · '+x.desc+(x.tipo!=='BAJO'?' · traer '+x.cantidad+(x.tipo==='ENCARGO'?' (ENCARGO)':''):' · vendidas '+x.vendidas+' (quedan '+(x.existencia==null?'?':x.existencia)+')')).join('\n')).join('\n\n');
 }
 const PED_ACT={
   async pedDel(el){
@@ -1564,7 +1625,7 @@ async function rgGo(el,detalle){
 }
 function rgRender(j){
   const st=[['Ventas',j.num],['Venta neta',fmt(j.total)],['Ticket promedio',fmt(j.ticketPromedio)],['Devuelto',fmt(j.devuelto)],['Descuentos otorgados',fmt(j.descuentoTotal)],
-    ['Notas de crédito emitidas',j.notasEmitidas.num+' · '+fmt(j.notasEmitidas.monto)],['Pagado con notas',fmt(j.pagadoConNotas)],['Ventas canceladas',j.canceladas+' · '+fmt(j.canceladoMonto)],['Baterías vendidas',j.baterias]]
+    ['Notas de crédito emitidas',j.notasEmitidas.num+' · '+fmt(j.notasEmitidas.monto)],['Pagado con notas',fmt(j.pagadoConNotas)],['Abonos de encargos y apartados',(j.abonosEncargos?j.abonosEncargos.num+' · '+fmt(j.abonosEncargos.monto):'—')],['Ventas canceladas',j.canceladas+' · '+fmt(j.canceladoMonto)],['Baterías vendidas',j.baterias]]
     .concat(Object.keys(j.porMetodo).map(k=>['Cobrado: '+k,fmt(j.porMetodo[k])]),Object.keys(j.porUsuario).map(k=>['Vendedor: '+k,fmt(j.porUsuario[k])]),Object.keys(j.porSucursal).map(k=>['Sucursal: '+k,fmt(j.porSucursal[k])]),Object.keys(j.descuentos).map(k=>['Descuento '+k,fmt(j.descuentos[k])]));
   $('#rgOut').innerHTML='<div class="hint">Del '+fdmy(j.desde)+' al '+fdmy(j.hasta)+(j.sucursal?' · sucursal '+esc(j.sucursal):' · todas las sucursales')+'. La venta neta ya descuenta lo devuelto.</div>'+
     '<div class="stats">'+st.map(x=>'<div class="stat"><small>'+esc(x[0])+'</small><b>'+esc(x[1])+'</b></div>').join('')+'</div>'+
@@ -1636,6 +1697,471 @@ async function ajPass(el){
     try{await api('changePassword',{actual:a,nueva:n});['#pwA','#pwN','#pwC'].forEach(s=>$(s).value='');toast('Contraseña cambiada')}
     catch(e){if(e.code!=='SESION')err.textContent=errMsg(e)}
   });
+}
+
+
+/* ===================================================================
+   ENCARGOS Y COTIZACIONES
+   =================================================================== */
+const E={tab:'nuevo',items:[],cli:'',tel:'',metodo:'Efectivo',anticipo:'',recibido:'',pct:40,pend:null,q:'',pay:null};
+const eTotal=()=>r2(E.items.reduce((a,i)=>a+i.precio*i.qty,0));
+const eMin=()=>{const t=eTotal();return t>0?r2(Math.ceil(t*E.pct-1e-9)/100):0};
+function encBadge(n){S.encListos=n||0;$('#encBadge').textContent=n>0?String(n):'';$('#encTabBadge').textContent=n>0?String(n):''}
+function encOpen(){
+  $('#enc').hidden=false;document.body.style.overflow='hidden';
+  encTab(S.encListos>0?'pend':(E.tab||'nuevo'));
+}
+function encClose(){$('#enc').hidden=true;document.body.style.overflow=S.admOpen?'hidden':'';closeM('#mEncPay')}
+function encTab(t){
+  E.tab=t;$$('#encTabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$('#enc').scrollTop=0;
+  if(t==='nuevo')encNuevo();else encPend();
+}
+$('#btnEnc').addEventListener('click',encOpen);
+$('#encX').addEventListener('click',encClose);
+$('#encTabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b)encTab(b.dataset.t)});
+const encBody=()=>$('#encBody');
+
+/* ---- Nuevo encargo / cotización ---- */
+function encNuevo(){
+  encBody().innerHTML=
+    '<div class="acard"><b>Cliente</b><div class="row" style="margin-top:6px"><input id="enCli" placeholder="Nombre del cliente" maxlength="60" autocomplete="off" value="'+esc(E.cli)+'"><input id="enTel" placeholder="Teléfono (10 dígitos)" inputmode="tel" maxlength="16" autocomplete="off" value="'+esc(E.tel)+'"></div></div>'+
+    '<div class="acard"><b>Piezas</b><div class="hint">Escribe el código de la pieza (del inventario o de tus listas de proveedor). El precio se calcula solo.</div>'+
+    '<div class="row" style="margin-top:6px"><input id="enCod" placeholder="Código" autocomplete="off" autocapitalize="characters"><input id="enQty" type="number" inputmode="numeric" min="1" value="1" style="max-width:80px" aria-label="Cantidad"><button class="btn auto" id="enAdd" type="button" style="flex:0 0 auto">Agregar</button></div>'+
+    '<div id="enErr" class="err" role="alert"></div><div id="enItems" style="margin-top:6px"></div></div>'+
+    '<div class="acard" id="enPay"></div>';
+  encItems();
+}
+function encItems(){
+  const box=$('#enItems');if(!box)return;
+  box.innerHTML=E.items.length?E.items.map((i,n)=>'<div class="encl"><div style="min-width:0"><b style="overflow-wrap:anywhere">'+esc(i.desc||i.codigo)+'</b><small class="hint" style="display:block;margin:0">'+esc(i.codigo)+' · '+fmt(i.precio)+' c/u · '+(i.enInv&&i.existencia>=i.qty?'<span style="color:var(--ok)">hay en existencia</span>':'se pedirá al proveedor')+'</small></div>'+
+    '<div class="qty"><button class="mini" type="button" data-en="-" data-n="'+n+'" aria-label="Menos">−</button><b>'+i.qty+'</b><button class="mini" type="button" data-en="+" data-n="'+n+'" aria-label="Más">+</button><button class="mini" type="button" data-en="x" data-n="'+n+'" aria-label="Quitar">✕</button></div></div>').join(''):'<div class="hint">Aún no hay piezas.</div>';
+  encPayRender();
+}
+function encPayRender(){
+  const box=$('#enPay');if(!box)return;const t=eTotal(),m=eMin();
+  if(E.anticipo===''||Number(E.anticipo)<m)E.anticipo=m>0?String(m):'';
+  box.innerHTML='<div class="total"><span>Total</span><span>'+fmt(t)+'</span></div>'+
+    '<div class="hint">Anticipo mínimo ('+E.pct+'%): <b>'+fmt(m)+'</b></div>'+
+    '<label for="enAnt">Anticipo que deja</label><input id="enAnt" type="number" inputmode="decimal" min="0" step="0.01" value="'+esc(E.anticipo)+'">'+
+    '<label for="enMet">Forma de pago</label><select id="enMet">'+['Efectivo','Tarjeta','Transferencia'].map(x=>'<option'+(x===E.metodo?' selected':'')+'>'+x+'</option>').join('')+'</select>'+
+    '<div id="enCash"'+(E.metodo==='Efectivo'?'':' hidden')+'><label for="enRec">Efectivo recibido</label><input id="enRec" type="number" inputmode="decimal" min="0" step="0.01" value="'+esc(E.recibido)+'"><div class="change" id="enChg"></div></div>'+
+    '<div id="enErr2" class="err" role="alert"></div>'+
+    '<div class="row" style="margin-top:10px"><button class="btn sec" type="button" id="enQuote">Imprimir cotización</button><button class="btn" type="button" id="enSave">Registrar encargo</button></div>';
+  encChg();
+}
+function encChg(){const o=$('#enChg');if(!o)return;const a=Number(E.anticipo),r=Number(E.recibido);o.textContent=(E.metodo==='Efectivo'&&r>0&&a>0)?(r>=a?'Cambio: '+fmt(r2(r-a)):'Faltan '+fmt(r2(a-r))):''}
+async function encAddCode(){
+  const cod=$('#enCod').value.trim(),q=parseInt($('#enQty').value,10)||1,err=$('#enErr');err.textContent='';
+  if(!cod){err.textContent='Escribe el código de la pieza.';return}
+  if(q<1||q>999){err.textContent='La cantidad debe ser de 1 a 999.';return}
+  await busy($('#enAdd'),'Buscando…',async()=>{
+    try{
+      const j=await api('cotizarCodigo',{codigo:cod});
+      const ex=E.items.find(i=>i.codigo.toUpperCase()===j.codigo.toUpperCase());
+      if(ex){ex.qty+=q;ex.existencia=j.existencia}else E.items.push({codigo:j.codigo,desc:j.desc,precio:j.precio,existencia:j.existencia,enInv:j.enInv,qty:q});
+      $('#enCod').value='';$('#enQty').value='1';encItems();$('#enCod').focus();
+    }catch(e){if(e.code!=='SESION')err.textContent=errMsg(e)}
+  });
+}
+function encDatos(){
+  const cli=($('#enCli').value||'').trim().replace(/\s+/g,' '),tel=($('#enTel').value||'').replace(/\D/g,'').replace(/^52(\d{10})$/,'$1');
+  E.cli=$('#enCli').value;E.tel=$('#enTel').value;
+  if(cli.length<2)return{error:'Escribe el nombre del cliente.'};
+  if(!/^\d{10}$/.test(tel))return{error:'El teléfono debe tener 10 dígitos.'};
+  if(!E.items.length)return{error:'Agrega al menos una pieza.'};
+  return{cli:cli,tel:tel};
+}
+function encQuote(){
+  const err=$('#enErr2');err.textContent='';const d=encDatos();if(d.error){err.textContent=d.error;return}
+  const n=new Date();
+  imprimirCotizacion({cliente:d.cli,telefono:d.tel,vendedor:S.user?S.user.nombre:'',fecha:todayStr(),hora:String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'),
+    items:E.items.map(i=>({codigo:i.codigo,desc:i.desc,qty:i.qty,precio:i.precio})),total:eTotal(),minimo:eMin(),pct:E.pct});
+}
+async function encSave(el){
+  const err=$('#enErr2');err.textContent='';const d=encDatos();if(d.error){err.textContent=d.error;return}
+  const ant=Number(E.anticipo),m=eMin();
+  if(!(ant>=m-0.004)){err.textContent='El anticipo mínimo es '+fmt(m)+' ('+E.pct+'%).';return}
+  if(ant>eTotal()+0.004){err.textContent='El anticipo no puede ser mayor al total.';return}
+  if(E.metodo==='Efectivo'&&!(Number(E.recibido)>=ant)){err.textContent='El efectivo recibido es menor al anticipo.';return}
+  await busy(el,'Guardando…',async()=>{
+    try{
+      const j=await api('saveEncargo',{cliente:d.cli,telefono:d.tel,items:E.items.map(i=>({codigo:i.codigo,qty:i.qty})),anticipo:ant,metodo:E.metodo,recibido:Number(E.recibido)||ant});
+      E.items=[];E.cli='';E.tel='';E.anticipo='';E.recibido='';
+      toast('Encargo '+j.encargo.folio+' registrado');
+      loadCatalog().then(renderAll).catch(()=>{});encNuevo();
+      imprimirEncargo(j.encargo,'ENCARGO · ANTICIPO');
+    }catch(e){if(e.code!=='SESION')err.textContent=errMsg(e)}
+  });
+}
+$('#encBody').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.id==='enAdd')return encAddCode();
+  if(b.id==='enQuote')return encQuote();
+  if(b.id==='enSave')return encSave(b);
+  if(b.dataset.en){
+    const i=E.items[+b.dataset.n];if(!i)return;
+    if(b.dataset.en==='+')i.qty=Math.min(999,i.qty+1);else if(b.dataset.en==='-')i.qty=Math.max(1,i.qty-1);else E.items.splice(+b.dataset.n,1);
+    return encItems();
+  }
+  if(b.dataset.ea)return encAction(b);
+});
+$('#encBody').addEventListener('input',e=>{
+  const t=e.target;
+  if(t.id==='enAnt'){E.anticipo=t.value;encChg()}
+  else if(t.id==='enRec'){E.recibido=t.value;encChg()}
+  else if(t.id==='enCli')E.cli=t.value;else if(t.id==='enTel')E.tel=t.value;
+  else if(t.id==='epQ'){E.q=t.value;encPendList()}
+});
+$('#encBody').addEventListener('change',e=>{if(e.target.id==='enMet'){E.metodo=e.target.value;encPayRender()}});
+$('#encBody').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.target.id==='enCod'||e.target.id==='enQty')){e.preventDefault();encAddCode()}});
+
+/* ---- Pendientes ---- */
+async function encPend(){
+  encBody().innerHTML='<div class="acard hint">Cargando encargos…</div>';
+  try{const j=await api('listEncargos');E.pend=j;E.pct=j.pct||E.pct;encBadge(j.listos);encPendRender()}
+  catch(e){failToast(e);encBody().innerHTML='<div class="acard err">'+esc(errMsg(e))+'</div>'}
+}
+function encPendRender(){
+  const j=E.pend;
+  encBody().innerHTML=(j.listos>0?'<div class="encbanner" role="status">✔ '+(j.listos===1?'Llegó la pieza de 1 encargo':'Llegaron las piezas de '+j.listos+' encargos')+'. Ya se pueden entregar.</div>':'')+
+    '<input id="epQ" placeholder="Buscar por folio, cliente, teléfono o código" autocomplete="off" value="'+esc(E.q)+'" style="margin-bottom:10px"><div id="epList"></div>';
+  encPendList();
+}
+function encPendList(){
+  const w=norm(E.q).split(/\s+/).filter(Boolean);
+  const l=E.pend.encargos.filter(e=>{const t=norm([e.folio,e.cliente,e.telefono,e.lineas.map(x=>x.codigo+' '+x.desc).join(' ')].join(' '));return w.every(x=>t.indexOf(x)>=0)});
+  $('#epList').innerHTML=l.length?l.map(encCard).join(''):'<div class="acard hint">No hay encargos pendientes.</div>';
+}
+function encCard(e){
+  const admin=S.user&&S.user.rol==='admin';
+  return '<div class="acard"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div style="min-width:0"><b>'+esc(e.folio)+' · '+esc(e.cliente)+'</b><small class="hint" style="display:block;margin:0">Tel. '+esc(e.telefono)+' · '+fdmy(e.fecha)+'</small></div>'+
+    '<span class="tag '+(e.estado==='LISTO'?'ok':'')+'">'+(e.estado==='LISTO'?'Llegó · entregar':'En pedido')+'</span></div>'+
+    '<div style="margin-top:6px">'+e.lineas.map(l=>'<div class="encl"><span style="overflow-wrap:anywhere">'+esc(l.desc||l.codigo)+' <small class="hint">('+esc(l.codigo)+')</small></span><span style="white-space:nowrap">'+l.cantidad+' × '+fmt(l.precio)+' '+(l.estado==='LLEGO'?'<span class="tag ok">llegó</span>':'<span class="tag">pendiente</span>')+'</span></div>').join('')+'</div>'+
+    '<div class="encmoney"><div>Total<b>'+fmt(e.total)+'</b></div><div>Pagado<b>'+fmt(e.pagado)+'</b></div><div>Saldo<b>'+fmt(e.saldo)+'</b></div></div>'+
+    '<div class="row" style="flex-wrap:wrap">'+
+    (e.saldo>0.004?'<button class="btn sec auto" data-ea="abono" data-f="'+esc(e.folio)+'">Abonar</button>':'')+
+    (e.estado==='LISTO'?'<button class="btn auto" data-ea="entrega" data-f="'+esc(e.folio)+'">Entregar'+(e.saldo>0.004?' y cobrar '+fmt(e.saldo):'')+'</button>':'')+
+    '<button class="btn sec auto" data-ea="print" data-f="'+esc(e.folio)+'">Imprimir</button>'+
+    (admin?'<button class="btn sec auto" data-ea="cancel" data-f="'+esc(e.folio)+'">Cancelar</button>':'')+'</div></div>';
+}
+function encFind(f){return E.pend&&E.pend.encargos.find(x=>x.folio===f)}
+async function encAction(b){
+  const e=encFind(b.dataset.f);if(!e)return;const a=b.dataset.ea;
+  if(a==='print')return imprimirEncargo(e,e.estado==='LISTO'?'ENCARGO · LISTO':'ENCARGO');
+  if(a==='abono'||a==='entrega')return encPayOpen(a,e);
+  if(a==='cancel'){
+    if(!confirm('¿Cancelar el encargo '+e.folio+'? El cliente ha pagado '+fmt(e.pagado)+'. El sistema NO devuelve dinero: hazlo tú según tu política.'))return;
+    try{const j=await api('cancelEncargo',{folio:e.folio});toast('Encargo cancelado. Había abonado '+fmt(j.abonado));loadCatalog().then(renderAll).catch(()=>{});encPend()}catch(er){failToast(er)}
+  }
+}
+/* ---- cobro de un abono / entrega ---- */
+function encPayOpen(tipo,e,kind){
+  E.pay={tipo:tipo,e:e,kind:kind||'enc'};const sinCobro=tipo==='entrega'&&e.saldo<=0.004;
+  $('#epyTitle').textContent=tipo==='abono'?'Abono · '+e.folio:'Entregar · '+e.folio;
+  $('#epyInfo').textContent=e.cliente+' · Saldo '+fmt(e.saldo)+(tipo==='entrega'&&!sinCobro?'. Para entregar se cobra el saldo completo.':(sinCobro?'. Ya está pagado: solo confirma la entrega.':''));
+  $('#epyMonto').value=tipo==='entrega'?e.saldo.toFixed(2):'';$('#epyMonto').readOnly=tipo==='entrega';
+  $('#epyMontoL').textContent=tipo==='abono'?'Monto del abono':'Saldo a cobrar';
+  $('#epyMetodo').value='Efectivo';$('#epyRecv').value='';$('#epyErr').textContent='';
+  $('#epyOk').textContent=tipo==='abono'?'Registrar abono':'Entregar';
+  ['#epyMontoL','#epyMonto','#epyMetodoL','#epyMetodo'].forEach(s=>{$(s).hidden=sinCobro});
+  encPayCash();openM('#mEncPay');
+}
+function encPayCash(){
+  const P=E.pay;const sinCobro=P&&P.tipo==='entrega'&&P.e.saldo<=0.004;
+  const ef=$('#epyMetodo').value==='Efectivo'&&!sinCobro;
+  $('#epyCash').hidden=!ef;const m=Number($('#epyMonto').value),r=Number($('#epyRecv').value);
+  $('#epyChange').textContent=(ef&&r>0&&m>0)?(r>=m?'Cambio: '+fmt(r2(r-m)):'Faltan '+fmt(r2(m-r))):'';
+}
+['#epyMetodo','#epyMonto','#epyRecv'].forEach(s=>$(s).addEventListener('input',encPayCash));
+$('#epyMetodo').addEventListener('change',encPayCash);
+$('#epyCancel').addEventListener('click',()=>closeM('#mEncPay'));
+$('#encPayForm').addEventListener('submit',async ev=>{
+  ev.preventDefault();const err=$('#epyErr');err.textContent='';const P=E.pay;if(!P)return;
+  const sinCobro=P.tipo==='entrega'&&P.e.saldo<=0.004;const monto=Number($('#epyMonto').value),metodo=$('#epyMetodo').value;
+  if(!sinCobro){
+    if(!(monto>0)){err.textContent='Escribe el monto.';return}
+    if(P.tipo==='abono'&&monto>P.e.saldo+0.004){err.textContent='El abono no puede ser mayor al saldo ('+fmt(P.e.saldo)+').';return}
+    if(metodo==='Efectivo'&&!(Number($('#epyRecv').value)>=monto)){err.textContent='El efectivo recibido es menor al monto.';return}
+  }
+  await busy($('#epyOk'),'Guardando…',async()=>{
+    try{
+      const rec=Number($('#epyRecv').value)||monto;
+      if(P.tipo==='abono'){
+        const j=await api(P.kind==='apt'?'abonoApartado':'abonoEncargo',{folio:P.e.folio,monto:monto,metodo:metodo,recibido:rec});
+        closeM('#mEncPay');toast('Abono registrado');imprimirEncargo(j.encargo||j.apartado,P.kind==='apt'?'APARTADO · ABONO':'ENCARGO · ABONO');
+      }else{
+        const j=await api(P.kind==='apt'?'entregarApartado':'entregarEncargo',sinCobro?{folio:P.e.folio}:{folio:P.e.folio,metodo:metodo,recibido:rec});
+        closeM('#mEncPay');toast('Encargo entregado');loadCatalog().then(renderAll).catch(()=>{});
+        imprimirTicket(j.venta,S.config||{});
+      }
+      if(P.kind==='apt')aptList();else encPend();
+    }catch(e){if(e.code!=='SESION')err.textContent=errMsg(e)}
+  });
+});
+
+
+/* ===================================================================
+   ETIQUETAS 40 × 30 mm · Phomemo M110 (203 dpi = 8 puntos por mm → 320 × 240 puntos)
+   =================================================================== */
+const LBL_W=320,LBL_H=240,LBL_PAD=12;
+function lblCanvas(draw){
+  const c=document.createElement('canvas');c.width=LBL_W;c.height=LBL_H;
+  const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,LBL_W,LBL_H);x.fillStyle='#000';x.textBaseline='top';draw(x);return c;
+}
+function lblLines(x,txt,maxW){
+  const out=[];
+  String(txt==null?'':txt).split('\n').forEach(par=>{
+    let cur='';
+    par.split(/\s+/).filter(Boolean).forEach(w0=>{
+      let w=w0;
+      while(x.measureText(w).width>maxW){let k=w.length;while(k>1&&x.measureText(w.slice(0,k)).width>maxW)k--;if(cur){out.push(cur);cur=''}out.push(w.slice(0,k));w=w.slice(k)}
+      const t=cur?cur+' '+w:w;if(x.measureText(t).width<=maxW)cur=t;else{out.push(cur);cur=w}
+    });
+    out.push(cur);
+  });
+  return out.filter((l,i,a)=>l!==''||a.length===1);
+}
+// Dibuja texto que se ajusta: baja el tamaño hasta que quepa en maxLines; devuelve la y donde termina
+function lblText(x,txt,o){
+  const f=s=>(o.bold?'bold ':'')+s+'px sans-serif';let size=o.size,lines;
+  for(;;){x.font=f(size);lines=lblLines(x,txt,o.w);if(lines.length<=o.maxLines||size<=o.min)break;size-=2}
+  if(lines.length>o.maxLines){
+    lines=lines.slice(0,o.maxLines);let l=lines[o.maxLines-1];
+    while(l.length>1&&x.measureText(l+'…').width>o.w)l=l.slice(0,-1);lines[o.maxLines-1]=l+'…';
+  }
+  const lh=Math.round(size*1.15);
+  x.textAlign=o.align||'left';const px=o.align==='center'?o.x+o.w/2:(o.align==='right'?o.x+o.w:o.x);
+  lines.forEach((l,i)=>x.fillText(l,px,o.y+i*lh));
+  return o.y+lines.length*lh;
+}
+function lblBarcode(x,y,h,text){
+  const w=code128Widths(text),mod=w.reduce((a,b)=>a+b,0),mw=Math.max(1,Math.min(3,Math.floor((LBL_W-LBL_PAD*2)/mod)));
+  let px=Math.round((LBL_W-mod*mw)/2);w.forEach((wd,i)=>{if(i%2===0)x.fillRect(px,y,wd*mw,h);px+=wd*mw});
+}
+function lblProducto(p,desc,conPrecio){
+  return lblCanvas(x=>{
+    const W=LBL_W-LBL_PAD*2;
+    lblText(x,p.codigo,{x:LBL_PAD,y:10,w:W,size:32,min:18,bold:1,maxLines:1,align:'center'});
+    lblText(x,desc||p.desc||'',{x:LBL_PAD,y:50,w:W,size:26,min:16,maxLines:3,align:'center'});
+    if(conPrecio&&p.precio>0)lblText(x,fmt(p.precio),{x:LBL_PAD,y:128,w:W,size:36,min:24,bold:1,maxLines:1,align:'center'});
+    lblBarcode(x,176,46,String(p.codigo));
+  });
+}
+function lblApartado(a){
+  return lblCanvas(x=>{
+    const W=LBL_W-LBL_PAD*2;
+    x.fillRect(0,0,LBL_W,42);x.fillStyle='#fff';
+    x.font='bold 30px sans-serif';x.textAlign='left';x.fillText('APARTADO',LBL_PAD,5);
+    x.font='bold 22px sans-serif';x.textAlign='right';x.fillText(a.folio,LBL_W-LBL_PAD,10);x.fillStyle='#000';
+    lblText(x,a.cliente,{x:LBL_PAD,y:50,w:W,size:28,min:18,bold:1,maxLines:2});
+    lblText(x,'Tel. '+a.telefono,{x:LBL_PAD,y:112,w:W,size:26,min:18,maxLines:1});
+    const ls=a.lineas||[];const extra=ls.length>1?' (+'+(ls.length-1)+' más)':'';
+    lblText(x,(ls[0]?(ls[0].cantidad>1?ls[0].cantidad+' x ':'')+(ls[0].desc||ls[0].codigo):'')+extra,{x:LBL_PAD,y:142,w:W,size:22,min:14,maxLines:2});
+    lblText(x,(a.saldo>0.004?'Resta '+fmt(a.saldo):'PAGADO')+' · '+fdmy(a.fecha),{x:LBL_PAD,y:200,w:W,size:26,min:16,bold:1,maxLines:1});
+  });
+}
+// Protocolo de la Phomemo M110 (etiquetas con espacio): velocidad, intensidad, tipo de papel 0x0a, imagen y cierre
+function phomemoJobM110(c,copies,dens){
+  const rb=c.width>>3,h=c.height,r=ticketRaster(c),parts=[];
+  const d=Math.max(1,Math.min(15,parseInt(dens,10)||10));
+  for(let k=0;k<Math.max(1,copies|0);k++){
+    parts.push(Uint8Array.from([0x1b,0x4e,0x0d,0x05,0x1b,0x4e,0x04,d,0x1f,0x11,0x0a]));
+    for(let y0=0;y0<h;y0+=255){const n=Math.min(255,h-y0);parts.push(Uint8Array.from([0x1d,0x76,0x30,0x00,rb&255,rb>>8,n&255,n>>8]));parts.push(r.subarray(y0*rb,(y0+n)*rb))}
+    parts.push(Uint8Array.from([0x1f,0xf0,0x05,0x00,0x1f,0xf0,0x03,0x00]));
+  }
+  const len=parts.reduce((a,p)=>a+p.length,0),all=new Uint8Array(len);let o=0;parts.forEach(p=>{all.set(p,o);o+=p.length});return all;
+}
+window.POSLBL={lblProducto,lblApartado,phomemoJobM110};
+
+const ET={mode:'',prod:null,apt:null,canvas:null,busy:false};
+const etMsg=(m,bad)=>{const e=$('#etMsg');e.textContent=m||'';e.style.color=bad?'var(--danger)':''};
+function etRender(){
+  ET.canvas=ET.mode==='prod'?lblProducto(ET.prod,$('#etDesc').value.trim(),$('#etPrice').checked):lblApartado(ET.apt);
+  $('#etImg').src=ET.canvas.toDataURL('image/png');
+}
+function etOpenCommon(title){
+  $('#etTitle').textContent=title;etMsg('');$('#etBt').hidden=!navigator.bluetooth;
+  try{const d=localStorage.getItem('pos_etq_dens');if(d)$('#etDens').value=d}catch(e){}
+  openM('#mEtq');
+}
+function etqProducto(code){
+  const p=getP(code);if(!p)return;ET.mode='prod';ET.prod=p;
+  $('#etEdit').hidden=false;$('#etVale').hidden=true;
+  $('#etDesc').value=(p.etq||p.desc||'').slice(0,80);$('#etCopies').value='1';
+  try{$('#etPrice').checked=localStorage.getItem('pos_etq_precio')==='1'}catch(e){$('#etPrice').checked=false}
+  $('#etSave').hidden=!(S.user&&S.user.rol==='admin');$('#etSave').textContent=p.etq?'Guardar cambios de la descripción':'Guardar esta descripción para siempre';
+  etOpenCommon('Etiqueta · '+p.codigo);etRender();
+}
+function etqApartado(a){
+  ET.mode='apt';ET.apt=a;$('#etEdit').hidden=true;$('#etVale').hidden=false;$('#etCopies').value='1';
+  etOpenCommon('Etiqueta de apartado · '+a.folio);etRender();
+}
+$('#fEtq').addEventListener('click',()=>{const c=S.fichaCode;closeM('#mFicha');if(c)etqProducto(c)});
+$('#etDesc').addEventListener('input',etRender);
+$('#etPrice').addEventListener('change',()=>{try{localStorage.setItem('pos_etq_precio',$('#etPrice').checked?'1':'0')}catch(e){}etRender()});
+$('#etDens').addEventListener('change',()=>{try{localStorage.setItem('pos_etq_dens',$('#etDens').value)}catch(e){}});
+$('#etClose').addEventListener('click',()=>closeM('#mEtq'));
+$('#etVale').addEventListener('click',()=>{const a=ET.apt;closeM('#mEtq');if(a)imprimirEncargo(a,'APARTADO')});
+$('#etSave').addEventListener('click',async()=>{
+  const p=ET.prod;if(!p)return;const txt=$('#etDesc').value.trim();
+  await busy($('#etSave'),'Guardando…',async()=>{
+    try{await api('saveProduct',{codigo:p.codigo,etiqueta:txt});p.etq=txt;etMsg('Descripción guardada ✓ (saldrá así cada vez).')}
+    catch(e){if(e.code!=='SESION')etMsg(errMsg(e),true)}
+  });
+});
+$('#etShare').addEventListener('click',async()=>{
+  if(!ET.canvas)return;const blob=await new Promise(r=>ET.canvas.toBlob(r,'image/png'));
+  const name='etiqueta_'+safeName(ET.mode==='prod'?ET.prod.codigo:ET.apt.folio)+'.png';
+  try{const f=new File([blob],name,{type:'image/png'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});return}}catch(e){if(e&&e.name==='AbortError')return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
+  etMsg('Imagen guardada. Ábrela con la app de Phomemo para imprimirla.');
+});
+$('#etBt').addEventListener('click',async()=>{
+  if(ET.busy||!ET.canvas||!navigator.bluetooth)return;ET.busy=true;const btn=$('#etBt');btn.disabled=true;
+  try{
+    const copies=Math.max(1,Math.min(50,parseInt($('#etCopies').value,10)||1));
+    const ch=await btConnect();
+    const job=phomemoJobM110(ET.canvas,copies,$('#etDens').value);
+    etMsg('Imprimiendo… 0 %');await btWrite(ch,job,pr=>etMsg('Imprimiendo… '+pr+' %'));
+    etMsg('Enviado a la impresora ✓ ('+copies+' etiqueta'+(copies===1?'':'s')+')');
+  }catch(e){
+    const n=e&&e.name;
+    if(n==='NotFoundError')etMsg('No se eligió ninguna impresora.',true);
+    else if(n==='NetworkError'||n==='InvalidStateError'){btChar=null;etMsg('Se perdió la conexión con la impresora. Enciéndela, acércala y vuelve a intentar.',true)}
+    else if(n==='SecurityError')etMsg('El navegador no permitió el Bluetooth. Revisa los permisos.',true);
+    else etMsg((e&&e.message)||'No se pudo imprimir.',true);
+  }
+  ET.busy=false;btn.disabled=false;
+});
+
+/* ===================================================================
+   APARTADOS
+   =================================================================== */
+const AP={tab:'nuevo',items:[],cli:'',tel:'',metodo:'Efectivo',anticipo:'',recibido:'',list:null,q:''};
+const aTotal=()=>r2(AP.items.reduce((a,i)=>a+i.precio*i.qty,0));
+const aMin=()=>{const t=aTotal(),pct=Number(S.config&&S.config.ApartadoPct)||0;return t>0?Math.max(0.01,r2(Math.ceil(t*pct-1e-9)/100)):0};
+const aptBody=()=>$('#aptBody');
+function aptOpen(){$('#apt').hidden=false;document.body.style.overflow='hidden';aptTab(AP.tab||'nuevo')}
+function aptClose(){$('#apt').hidden=true;document.body.style.overflow=S.admOpen?'hidden':'';closeM('#mEncPay');closeM('#mEtq')}
+function aptTab(t){AP.tab=t;$$('#aptTabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$('#apt').scrollTop=0;if(t==='nuevo')aptNuevo();else aptList()}
+$('#btnApt').addEventListener('click',aptOpen);
+$('#aptX').addEventListener('click',aptClose);
+$('#aptTabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b)aptTab(b.dataset.t)});
+function aptNuevo(){
+  aptBody().innerHTML=
+    '<div class="acard"><b>Cliente</b><div class="row" style="margin-top:6px"><input id="apCli" placeholder="Nombre del cliente" maxlength="60" autocomplete="off" value="'+esc(AP.cli)+'"><input id="apTel" placeholder="Teléfono (10 dígitos)" inputmode="tel" maxlength="16" autocomplete="off" value="'+esc(AP.tel)+'"></div></div>'+
+    '<div class="acard"><b>Pieza a apartar</b><div class="hint">Busca por código o descripción. Una pieza apartada ya no se puede vender a nadie más.</div>'+
+    '<div class="row" style="margin-top:6px"><input id="apQ" placeholder="Código o descripción" autocomplete="off"><input id="apQty" type="number" inputmode="numeric" min="1" value="1" style="max-width:80px" aria-label="Cantidad"></div>'+
+    '<div id="apRes" style="margin-top:6px"></div><div id="apErr" class="err" role="alert"></div><div id="apItems" style="margin-top:6px"></div></div>'+
+    '<div class="acard" id="apPay"></div>';
+  aptItems();
+}
+function aptItems(){
+  const box=$('#apItems');if(!box)return;
+  box.innerHTML=AP.items.length?AP.items.map((i,n)=>'<div class="encl"><div style="min-width:0"><b style="overflow-wrap:anywhere">'+esc(i.desc)+'</b><small class="hint" style="display:block;margin:0">'+esc(i.codigo)+' · '+fmt(i.precio)+' c/u</small></div>'+
+    '<div class="qty"><button class="mini" type="button" data-ap="-" data-n="'+n+'" aria-label="Menos">−</button><b>'+i.qty+'</b><button class="mini" type="button" data-ap="+" data-n="'+n+'" aria-label="Más">+</button><button class="mini" type="button" data-ap="x" data-n="'+n+'" aria-label="Quitar">✕</button></div></div>').join(''):'<div class="hint">Aún no hay piezas.</div>';
+  aptPayRender();
+}
+function aptPayRender(){
+  const box=$('#apPay');if(!box)return;const t=aTotal(),m=aMin();
+  if(AP.anticipo===''||Number(AP.anticipo)<m)AP.anticipo=m>0?String(m):'';
+  box.innerHTML='<div class="total"><span>Total</span><span>'+fmt(t)+'</span></div>'+
+    '<label for="apAnt">Abono que deja ahora</label><input id="apAnt" type="number" inputmode="decimal" min="0" step="0.01" value="'+esc(AP.anticipo)+'">'+
+    '<label for="apMet">Forma de pago</label><select id="apMet">'+['Efectivo','Tarjeta','Transferencia'].map(x=>'<option'+(x===AP.metodo?' selected':'')+'>'+x+'</option>').join('')+'</select>'+
+    '<div'+(AP.metodo==='Efectivo'?'':' hidden')+'><label for="apRec">Efectivo recibido</label><input id="apRec" type="number" inputmode="decimal" min="0" step="0.01" value="'+esc(AP.recibido)+'"><div class="change" id="apChg"></div></div>'+
+    '<div id="apErr2" class="err" role="alert"></div><button class="btn" type="button" id="apSave" style="margin-top:10px">Apartar e imprimir etiqueta</button>';
+  aptChg();
+}
+function aptChg(){const o=$('#apChg');if(!o)return;const a=Number(AP.anticipo),r=Number(AP.recibido);o.textContent=(AP.metodo==='Efectivo'&&r>0&&a>0)?(r>=a?'Cambio: '+fmt(r2(r-a)):'Faltan '+fmt(r2(a-r))):''}
+function aptSearch(){
+  const w=norm($('#apQ').value).split(/\s+/).filter(Boolean),box=$('#apRes');
+  if(!w.length){box.innerHTML='';return}
+  const l=S.prods.filter(p=>!p.bateria&&p.precio>0&&p.existencia>0&&w.every(x=>p._n.indexOf(x)>=0)).slice(0,6);
+  box.innerHTML=l.length?l.map(p=>'<button type="button" class="aprow" data-apadd="'+esc(p.codigo)+'"><span style="min-width:0;overflow-wrap:anywhere"><b>'+esc(p.desc)+'</b><small class="hint" style="display:block;margin:0">'+esc(p.codigo)+' · hay '+p.existencia+'</small></span><b>'+fmt(p.precio)+'</b></button>').join(''):'<div class="hint">Sin resultados con existencia (las baterías no se apartan).</div>';
+}
+function aptAddCode(code){
+  const err=$('#apErr');err.textContent='';const p=S.byCode[String(code).toUpperCase()];const q=parseInt($('#apQty').value,10)||1;
+  if(!p){err.textContent='No encontré ese código.';return}
+  if(p.bateria){err.textContent='Las baterías no se apartan.';return}
+  if(!(p.precio>0)){err.textContent='Ese producto no tiene precio.';return}
+  const ex=AP.items.find(i=>i.codigo===p.codigo);const ya=ex?ex.qty:0;
+  if(q<1||ya+q>p.existencia){err.textContent='Solo hay '+p.existencia+' disponible'+(p.existencia===1?'':'s')+' de '+p.codigo+'.';return}
+  if(ex)ex.qty+=q;else AP.items.push({codigo:p.codigo,desc:p.desc,precio:p.precio,qty:q});
+  $('#apQ').value='';$('#apQty').value='1';$('#apRes').innerHTML='';aptItems();$('#apQ').focus();
+}
+function aptDatos(){
+  const cli=($('#apCli').value||'').trim().replace(/\s+/g,' '),tel=($('#apTel').value||'').replace(/\D/g,'').replace(/^52(\d{10})$/,'$1');
+  AP.cli=$('#apCli').value;AP.tel=$('#apTel').value;
+  if(cli.length<2)return{error:'Escribe el nombre del cliente.'};
+  if(!/^\d{10}$/.test(tel))return{error:'El teléfono debe tener 10 dígitos.'};
+  if(!AP.items.length)return{error:'Agrega la pieza que se va a apartar.'};
+  return{cli:cli,tel:tel};
+}
+async function aptSave(el){
+  const err=$('#apErr2');err.textContent='';const d=aptDatos();if(d.error){err.textContent=d.error;return}
+  const ant=Number(AP.anticipo),m=aMin();
+  if(!(ant>=m-0.004)||!(ant>0)){err.textContent='Deja un abono para apartar'+(m>0.01?' (mínimo '+fmt(m)+')':'')+'.';return}
+  if(ant>aTotal()+0.004){err.textContent='El abono no puede ser mayor al total.';return}
+  if(AP.metodo==='Efectivo'&&!(Number(AP.recibido)>=ant)){err.textContent='El efectivo recibido es menor al abono.';return}
+  await busy(el,'Guardando…',async()=>{
+    try{
+      const j=await api('saveApartado',{cliente:d.cli,telefono:d.tel,items:AP.items.map(i=>({codigo:i.codigo,qty:i.qty})),anticipo:ant,metodo:AP.metodo,recibido:Number(AP.recibido)||ant});
+      AP.items=[];AP.cli='';AP.tel='';AP.anticipo='';AP.recibido='';
+      toast('Apartado '+j.apartado.folio+' registrado');
+      loadCatalog().then(renderAll).catch(()=>{});aptNuevo();etqApartado(j.apartado);
+    }catch(e){if(e.code!=='SESION')err.textContent=errMsg(e)}
+  });
+}
+$('#aptBody').addEventListener('click',e=>{
+  const ad=e.target.closest('[data-apadd]');if(ad)return aptAddCode(ad.dataset.apadd);
+  const b=e.target.closest('button');if(!b)return;
+  if(b.id==='apSave')return aptSave(b);
+  if(b.dataset.ap){
+    const i=AP.items[+b.dataset.n];if(!i)return;const p=S.byCode[i.codigo.toUpperCase()];
+    if(b.dataset.ap==='+')i.qty=Math.min(p?p.existencia:i.qty,i.qty+1);else if(b.dataset.ap==='-')i.qty=Math.max(1,i.qty-1);else AP.items.splice(+b.dataset.n,1);
+    return aptItems();
+  }
+  if(b.dataset.aa)return aptAction(b);
+});
+$('#aptBody').addEventListener('input',e=>{
+  const t=e.target;
+  if(t.id==='apQ')aptSearch();
+  else if(t.id==='apAnt'){AP.anticipo=t.value;aptChg()}
+  else if(t.id==='apRec'){AP.recibido=t.value;aptChg()}
+  else if(t.id==='apCli')AP.cli=t.value;else if(t.id==='apTel')AP.tel=t.value;
+  else if(t.id==='apSearch'){AP.q=t.value;aptListRender()}
+});
+$('#aptBody').addEventListener('change',e=>{if(e.target.id==='apMet'){AP.metodo=e.target.value;aptPayRender()}});
+$('#aptBody').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target.id==='apQ'){e.preventDefault();const v=e.target.value.trim();if(v&&S.byCode[v.toUpperCase()])aptAddCode(v);else{const f=$('#apRes [data-apadd]');if(f)aptAddCode(f.dataset.apadd)}}
+});
+async function aptList(){
+  aptBody().innerHTML='<div class="acard hint">Cargando apartados…</div>';
+  try{const j=await api('listApartados');AP.list=j;aptBody().innerHTML='<input id="apSearch" placeholder="Buscar por folio, cliente, teléfono o código" autocomplete="off" value="'+esc(AP.q)+'" style="margin-bottom:10px"><div id="apList"></div>';aptListRender()}
+  catch(e){failToast(e);aptBody().innerHTML='<div class="acard err">'+esc(errMsg(e))+'</div>'}
+}
+function aptListRender(){
+  const w=norm(AP.q).split(/\s+/).filter(Boolean);
+  const l=AP.list.apartados.filter(a=>{const t=norm([a.folio,a.cliente,a.telefono,a.lineas.map(x=>x.codigo+' '+x.desc).join(' ')].join(' '));return w.every(x=>t.indexOf(x)>=0)});
+  const admin=S.user&&S.user.rol==='admin';
+  $('#apList').innerHTML=l.length?l.map(a=>'<div class="acard"><div style="min-width:0"><b>'+esc(a.folio)+' · '+esc(a.cliente)+'</b><small class="hint" style="display:block;margin:0">Tel. '+esc(a.telefono)+' · apartado el '+fdmy(a.fecha)+'</small></div>'+
+    '<div style="margin-top:6px">'+a.lineas.map(x=>'<div class="encl"><span style="overflow-wrap:anywhere">'+esc(x.desc||x.codigo)+' <small class="hint">('+esc(x.codigo)+')</small></span><span style="white-space:nowrap">'+x.cantidad+' × '+fmt(x.precio)+'</span></div>').join('')+'</div>'+
+    '<div class="encmoney"><div>Total<b>'+fmt(a.total)+'</b></div><div>Pagado<b>'+fmt(a.pagado)+'</b></div><div>Resta<b>'+fmt(a.saldo)+'</b></div></div>'+
+    '<div class="row" style="flex-wrap:wrap">'+(a.saldo>0.004?'<button class="btn sec auto" data-aa="abono" data-f="'+esc(a.folio)+'">Abonar</button>':'')+
+    '<button class="btn auto" data-aa="entrega" data-f="'+esc(a.folio)+'">Entregar'+(a.saldo>0.004?' y cobrar '+fmt(a.saldo):'')+'</button>'+
+    '<button class="btn sec auto" data-aa="etq" data-f="'+esc(a.folio)+'">Etiqueta</button><button class="btn sec auto" data-aa="vale" data-f="'+esc(a.folio)+'">Comprobante</button>'+
+    (admin?'<button class="btn sec auto" data-aa="cancel" data-f="'+esc(a.folio)+'">Cancelar</button>':'')+'</div></div>').join(''):'<div class="acard hint">No hay apartados abiertos.</div>';
+}
+async function aptAction(b){
+  const a=AP.list&&AP.list.apartados.find(x=>x.folio===b.dataset.f);if(!a)return;const k=b.dataset.aa;
+  if(k==='etq')return etqApartado(a);
+  if(k==='vale')return imprimirEncargo(a,'APARTADO');
+  if(k==='abono')return encPayOpen('abono',a,'apt');
+  if(k==='entrega')return encPayOpen('entrega',a,'apt');
+  if(k==='cancel'){
+    if(!confirm('¿Cancelar el apartado '+a.folio+'? El cliente ha pagado '+fmt(a.pagado)+'. El sistema NO devuelve dinero: hazlo tú según tu política.'))return;
+    try{const j=await api('cancelApartado',{folio:a.folio});toast('Apartado cancelado. Había abonado '+fmt(j.abonado));loadCatalog().then(renderAll).catch(()=>{});aptList()}catch(er){failToast(er)}
+  }
 }
 
 /* ---------- Eventos de las pantallas de administración ---------- */
@@ -1847,6 +2373,46 @@ function phomemoJob(c){
   return all;
 }
 
+function buildCotizacion(c,cfg){
+  const k=ticketKit();cfg=cfg||{};
+  ticketHead(k,cfg);
+  k.text('COTIZACIÓN',26,{bold:1,align:'center'});
+  k.text(fdmy(c.fecha)+' '+String(c.hora||'').slice(0,5),18,{align:'center'});
+  k.text('Cliente: '+c.cliente,20,{bold:1});
+  k.text('Tel. cliente: '+c.telefono,18);
+  if(c.vendedor)k.text('Cotizó: '+c.vendedor+(cfg.Telefono?' · Tel. '+cfg.Telefono:''),18);
+  k.rule(true);
+  c.items.forEach(it=>{k.text(String(it.desc||it.codigo),20,{bold:1});k.pair(it.qty+' x '+fmt(it.precio),fmt(r2(it.precio*it.qty)),20)});
+  k.rule(true);
+  k.pair('TOTAL',fmt(c.total),30,{bold:1});
+  k.pair('Anticipo mínimo ('+c.pct+'%)',fmt(c.minimo),20,{bold:1});
+  k.pair('Saldo al entregar',fmt(r2(c.total-c.minimo)),18);
+  k.rule(true);
+  k.text('Para encargar la pieza se requiere un anticipo mínimo del '+c.pct+'% del valor. Se puede abonar hasta liquidar; la pieza se entrega al pagar el total. Esta cotización no es un comprobante de pago.',16,{align:'center'});
+  return k.finish();
+}
+function buildEncargo(e,cfg,titulo){
+  const k=ticketKit();cfg=cfg||{};
+  ticketHead(k,cfg);
+  k.text(titulo||'ENCARGO',26,{bold:1,align:'center'});
+  k.text('Folio: '+e.folio,24,{bold:1,align:'center'});
+  k.text(fdmy(e.fecha)+' '+String(e.hora||'').slice(0,5),18,{align:'center'});
+  k.text('Cliente: '+e.cliente,20,{bold:1});
+  k.text('Tel. cliente: '+e.telefono,18);
+  if(e.vendedor)k.text('Atendió: '+e.vendedor+(cfg.Telefono?' · Tel. '+cfg.Telefono:''),18);
+  k.rule(true);
+  e.lineas.forEach(l=>{k.text(String(l.desc||l.codigo)+(l.estado==='LLEGO'?'  (LLEGÓ)':''),20,{bold:1});k.pair(l.cantidad+' x '+fmt(l.precio),fmt(l.importe),20)});
+  k.rule(true);
+  k.pair('TOTAL',fmt(e.total),28,{bold:1});
+  (e.abonos||[]).forEach(a=>k.pair((a.tipo==='ANTICIPO'?'Anticipo':(a.tipo==='LIQUIDACION'?'Liquidación':'Abono'))+' '+fdmy(a.fecha),fmt(a.monto),18));
+  k.pair('Pagado',fmt(e.pagado),22,{bold:1});
+  k.pair('SALDO',fmt(e.saldo),28,{bold:1});
+  if(e.metodo==='Efectivo'&&e.recibido!=null&&e.cambio!=null){k.text('Último pago en efectivo: recibido '+fmt(e.recibido)+' · cambio '+fmt(e.cambio),16)}
+  k.rule(true);
+  k.code(e.folio);
+  k.text('Presenta este comprobante para abonar o recoger tu pieza. Se entrega al liquidar el total.',16,{align:'center'});
+  return k.finish();
+}
 const tk={canvas:null,name:'ticket',busy:false};
 let btDev=null,btChar=null;
 const BT_SERVICES=['0000ff00-0000-1000-8000-00805f9b34fb','000018f0-0000-1000-8000-00805f9b34fb','0000ae30-0000-1000-8000-00805f9b34fb','e7810a71-73ae-499d-8c15-faa9aef0c3f2','49535343-fe7d-4ae5-8fa9-9fafd205e455'];
@@ -1870,7 +2436,9 @@ function imprimirNota(nota,cfg){
   if(!nota)return;
   mostrarTicket(buildNota(nota,cfg||S.config||{}),'nota_credito_'+safeName(nota.folio),'Nota de crédito');
 }
-window.imprimirNota=imprimirNota;
+function imprimirEncargo(e,titulo){mostrarTicket(buildEncargo(e,S.config||{},titulo),'encargo_'+safeName(e.folio),titulo||'Encargo')}
+function imprimirCotizacion(c){mostrarTicket(buildCotizacion(c,S.config||{}),'cotizacion_'+safeName(c.cliente||'cliente'),'Cotización')}
+window.imprimirNota=imprimirNota;window.POSENC={buildCotizacion,buildEncargo};
 window.imprimirTicket=imprimirTicket;
 
 async function btConnect(){
