@@ -254,6 +254,7 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
     <button class="chip" id="btnRefresh" title="Actualizar catálogo" aria-label="Actualizar catálogo">↻</button>
     <button class="chip" id="btnDev">Devoluciones</button>
     <button class="chip" id="btnApt">Apartados</button>
+    <button class="chip" id="btnPts">Puntos</button>
     <button class="chip" id="btnEnc" aria-label="Encargos y cotizaciones">Encargos<span class="badge" id="encBadge"></span></button>
     <button class="chip" id="btnAdmin" hidden>Administración</button>
     <button class="chip" id="btnLogout">Salir</button>
@@ -274,6 +275,7 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
           <div><label for="fAnio">Año</label><input id="fAnio" type="number" inputmode="numeric" min="1950" max="2100" placeholder="Ej. 2019"></div>
           <div><label for="fOrigen">Tipo de pieza</label><select id="fOrigen"><option value="">Originales y genéricas</option><option value="ORIGINAL">Solo originales</option><option value="GENERICO">Solo genéricas</option></select></div>
           <div class="full"><label for="fCamara">Llantas</label><select id="fCamara"><option value="">Con o sin cámara</option><option value="SI">Usan cámara</option><option value="NO">Sin cámara (tubeless)</option></select></div>
+          <div class="full"><label>Piso de la llanta (elige uno, dos o los tres)</label><div id="fPiso" style="display:flex;flex-wrap:wrap;gap:4px 16px"><label class="chk" style="margin:4px 0"><input type="checkbox" value="DOBLE PROPOSITO"> Doble propósito</label><label class="chk" style="margin:4px 0"><input type="checkbox" value="LISA"> Lisa</label><label class="chk" style="margin:4px 0"><input type="checkbox" value="GAJO"> Gajo</label></div></div>
         </div>
         <div class="hint" id="resInfo"></div>
         <div class="grid" id="grid"></div>
@@ -329,6 +331,15 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
       <div class="hint" id="ncInfo" role="status"></div>
     </div>
   </div>
+  <div style="margin:8px 0">
+    <button class="link" id="ptToggle" type="button" style="margin-top:0">Tarjeta de puntos (repartidor)</button>
+    <div id="ptForm" hidden>
+      <div class="fr"><input id="ptTel" inputmode="tel" placeholder="Celular (10 dígitos)" autocomplete="off" aria-label="Celular del repartidor"><button class="btn auto sec" id="ptFind" type="button">Buscar</button></div>
+      <div id="ptReg" hidden><label for="ptNom">Repartidor nuevo: escribe su nombre</label><div class="fr"><input id="ptNom" maxlength="60" autocomplete="off"><button class="btn auto" id="ptRegBtn" type="button">Registrar</button></div></div>
+      <div class="hint" id="ptInfo" role="status"></div>
+      <div id="ptUse" hidden><label for="ptUsar">Puntos a usar como pago (0 = solo acumular)</label><div class="fr"><input id="ptUsar" type="number" inputmode="numeric" min="0" step="1" value="0"><button class="btn auto sec" id="ptMax" type="button">Máximo</button></div></div>
+    </div>
+  </div>
   <div id="cashBox">
     <label for="recv">Efectivo recibido</label>
     <input id="recv" type="number" inputmode="decimal" min="0" step="0.01">
@@ -339,6 +350,16 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
     <button class="btn sec" id="payCancel">Cancelar</button>
     <button class="btn" id="payOk">Confirmar venta</button>
   </div>
+</div></div>
+
+<!-- ============ MODAL: TARJETA DE PUNTOS ============ -->
+<div class="modal" id="mPts" role="dialog" aria-modal="true"><div class="sheet" style="max-width:440px">
+  <h2>Tarjeta de puntos</h2>
+  <div class="hint">Solo repartidores. Se identifican con su número de celular; no necesitan tarjeta física.</div>
+  <label for="ptsTel">Celular (10 dígitos)</label>
+  <div class="fr"><input id="ptsTel" inputmode="tel" autocomplete="off"><button class="btn auto" id="ptsFind" type="button">Buscar</button></div>
+  <div id="ptsOut" style="margin-top:10px"></div>
+  <div class="row" style="margin-top:10px"><button class="btn sec" id="ptsClose">Cerrar</button></div>
 </div></div>
 
 <!-- ============ MODAL: VENTA REGISTRADA ============ -->
@@ -491,7 +512,7 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
 <div id="enc" class="adm" hidden>
   <div class="admtop"><b>Encargos y cotizaciones</b><button class="chip" id="encX">Cerrar ✕</button></div>
   <nav class="admtabs" id="encTabs">
-    <button data-t="nuevo" class="on">Nuevo encargo</button>
+    <button data-t="nuevo" class="on">Cotizar / Encargo</button>
     <button data-t="pend">Pendientes<span class="badge" id="encTabBadge"></span></button>
   </nav>
   <div class="admbody" id="encBody"></div>
@@ -561,6 +582,7 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
     <div style="grid-column:1/-1"><label for="epMotos">Motos compatibles (para el filtro)</label><textarea id="epMotos" rows="3" placeholder="ITALIKA FT150 2012-2022; VENTO XVE 150 2018+   (escribe UNIVERSAL si sirve para todas)"></textarea></div>
     <div style="grid-column:1/-1"><label for="epEquiv">Códigos originales equivalentes</label><input id="epEquiv" autocomplete="off" placeholder="Separados con coma. Así aparece al buscar el código original"></div>
     <div><label for="epOrigen">Tipo de pieza</label><select id="epOrigen"><option value="">Automático (por proveedor)</option><option value="ORIGINAL">Original</option><option value="GENERICO">Genérica</option></select></div>
+    <div><label for="epPiso">Llantas: piso</label><select id="epPiso"><option value="">No aplica</option><option value="DOBLE PROPOSITO">Doble propósito</option><option value="LISA">Lisa</option><option value="GAJO">Gajo</option></select></div>
     <div><label for="epCamara">Llantas: cámara</label><select id="epCamara"><option value="">No aplica</option><option value="SI">Usan cámara</option><option value="NO">Sin cámara</option></select></div>
   </div>
   <datalist id="dlDeps"></datalist>
@@ -626,7 +648,7 @@ const fdmy=s=>{const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?
    ESTADO
    =================================================================== */
 const S={url:'',token:'',user:null,config:{},prods:[],byCode:{},cat:'',q:'',cart:[],pay:'Efectivo',
-  auth:null,authAt:0,busy:false,fichaCode:null,priceCode:null,lastSale:null,nc:null,mec:null,f:{moto:'',anio:'',origen:'',camara:''},descCfg:{mecanico:0,volumen:0,volMin:16,deps:{}}};
+  auth:null,authAt:0,busy:false,fichaCode:null,priceCode:null,lastSale:null,nc:null,mec:null,f:{moto:'',anio:'',origen:'',camara:'',piso:[]},descCfg:{mecanico:0,volumen:0,volMin:16,deps:{}}};
 const AUTH_MS=170000; // el servidor la da por 180 s; aquí un margen
 const MAX_SHOW=200;
 
@@ -719,7 +741,7 @@ async function loadCatalog(){
   // equivalencias: un producto genérico y su código original (si también está en el inventario) se encuentran el uno al otro
   const link=(a,b)=>{if(a._rel.indexOf(b)<0)a._rel.push(b)};
   S.prods.forEach(p=>p.equiv.forEach(c=>{const q=S.byCode[String(c).toUpperCase()];if(q&&q!==p){link(p,q);link(q,p)}}));
-  S.prods.forEach(p=>{p._n=norm([p.desc,p.codigo,p.depto,p.motos,p.equiv.join(' '),p._rel.map(q=>q.codigo).join(' ')].join(' '))});
+  S.prods.forEach(p=>{p._n=norm([p.desc,p.codigo,p.depto,p.motos,p.equiv.join(' '),p._rel.map(q=>q.codigo).join(' '),(PISO_TXT[p.piso]||'')].join(' '))});
   // el carrito se ajusta a lo que haya ahora en existencia
   S.cart=S.cart.filter(l=>{const p=S.byCode[l.codigo.toUpperCase()];if(!p)return false;if(l.qty>p.existencia)l.qty=p.existencia;return l.qty>0});
   const cnt={};S.prods.forEach(p=>{const d=p.depto||'(sin departamento)';cnt[d]=(cnt[d]||0)+1});
@@ -737,6 +759,7 @@ $('#btnRefresh').addEventListener('click',async()=>{
    VENTA · búsqueda y cuadrícula
    =================================================================== */
 // "Motos compatibles": entradas separadas con ; — ej. "ITALIKA FT150 2012-2022; VENTO XVE 150 2018+; UNIVERSAL"
+const PISO_TXT={'DOBLE PROPOSITO':'Doble propósito','LISA':'Lisa','GAJO':'Gajo'};
 function parseMotos(txt){
   const out=[];
   String(txt||'').split(/[;\n]+/).forEach(seg=>{
@@ -750,8 +773,8 @@ function parseMotos(txt){
   });
   return out;
 }
-function motoFilter(){
-  const f=S.f;let moto=norm(f.moto);let anio=parseInt(f.anio,10);
+function motoFilter(f){
+  f=f||S.f;let moto=norm(f.moto);let anio=parseInt(f.anio,10);
   const ym=moto.match(/\b((?:19|20)\d{2})\b/);
   if(!(anio>=1900&&anio<=2100))anio=ym?+ym[1]:null;
   moto=moto.replace(/\b(?:19|20)\d{2}\b/g,' ');
@@ -769,13 +792,14 @@ function motoMatch(p,f){
     return true;
   });
 }
-function filtrosActivos(){const f=S.f;return (f.moto.trim()?1:0)+(String(f.anio).trim()?1:0)+(f.origen?1:0)+(f.camara?1:0)}
+function filtrosActivos(){const f=S.f;return (f.moto.trim()?1:0)+(String(f.anio).trim()?1:0)+(f.origen?1:0)+(f.camara?1:0)+((f.piso&&f.piso.length)?1:0)}
 function filtrar(){
   const words=norm(S.q).split(/\s+/).filter(Boolean);const mf=motoFilter();const f=S.f;
   return S.prods.filter(p=>{
     if(S.cat){const d=p.depto||'(sin departamento)';if(d!==S.cat)return false}
     if(f.origen&&p.origen!==f.origen)return false;
     if(f.camara&&p.camara!==f.camara)return false;
+    if(f.piso&&f.piso.length&&f.piso.indexOf(p.piso)<0)return false;
     if(mf.on&&!motoMatch(p,mf))return false;
     return words.every(w=>p._n.indexOf(w)>=0);
   });
@@ -790,7 +814,7 @@ function renderGrid(){
     return '<div class="prod'+(out?' out':'')+(admin&&p.alerta?' warn':'')+'" data-c="'+esc(p.codigo)+'" role="button" tabindex="0">'+
       '<div class="ph">'+(p.foto?'<img class="phimg" loading="lazy" src="'+esc(fotoUrl(p.foto,240))+'" alt="">':'')+'<span class="ini">'+esc((p.desc||'?').trim().charAt(0).toUpperCase())+'</span></div>'+
       '<b class="nm">'+esc(p.desc)+'</b>'+
-      '<small>'+esc(p.codigo)+(p.electrico?' <span class="tag el">Eléctrico</span>':'')+(p.origen==='ORIGINAL'?' <span class="tag">Original</span>':(p.origen==='GENERICO'?' <span class="tag">Genérica</span>':''))+(p.camara==='SI'?' <span class="tag">Con cámara</span>':(p.camara==='NO'?' <span class="tag">Sin cámara</span>':''))+'</small>'+
+      '<small>'+esc(p.codigo)+(p.electrico?' <span class="tag el">Eléctrico</span>':'')+(p.origen==='ORIGINAL'?' <span class="tag">Original</span>':(p.origen==='GENERICO'?' <span class="tag">Genérica</span>':''))+(p.camara==='SI'?' <span class="tag">Con cámara</span>':(p.camara==='NO'?' <span class="tag">Sin cámara</span>':''))+(p.piso?' <span class="tag">'+esc(PISO_TXT[p.piso]||p.piso)+'</span>':'')+'</small>'+
       '<div class="pr"><span>'+(p.precio>0?fmt(p.precio):'Sin precio')+'</span><button class="add" data-add="'+esc(p.codigo)+'" '+(out?'disabled':'')+' aria-label="Agregar">+</button></div>'+
       '<small>'+(p.existencia<=0?'Agotado':'Existencia: '+p.existencia)+'</small>'+
       (admin&&p.alerta?'<span class="tag red">Precio bajo costo</span>':'')+
@@ -812,10 +836,11 @@ $('#dep').addEventListener('change',e=>{S.cat=e.target.value;renderGrid()});
 // ----- panel de filtros
 let fT;
 $('#btnFilt').addEventListener('click',()=>{const h=$('#fPanel').hidden;$('#fPanel').hidden=!h;$('#btnFilt').setAttribute('aria-expanded',String(h));if(h)setTimeout(()=>{try{if(window.matchMedia('(pointer:fine)').matches)$('#fMoto').focus()}catch(e){}},30)});
-const fSync=()=>{S.f={moto:$('#fMoto').value,anio:$('#fAnio').value,origen:$('#fOrigen').value,camara:$('#fCamara').value}};
+const fSync=()=>{S.f={moto:$('#fMoto').value,anio:$('#fAnio').value,origen:$('#fOrigen').value,camara:$('#fCamara').value,piso:$$('#fPiso input:checked').map(i=>i.value)}};
 ['#fMoto','#fAnio'].forEach(id=>$(id).addEventListener('input',()=>{fSync();clearTimeout(fT);fT=setTimeout(renderGrid,150)}));
 ['#fOrigen','#fCamara'].forEach(id=>$(id).addEventListener('change',()=>{fSync();renderGrid()}));
-$('#fClear').addEventListener('click',()=>{$('#fMoto').value='';$('#fAnio').value='';$('#fOrigen').value='';$('#fCamara').value='';fSync();renderGrid()});
+$('#fPiso').addEventListener('change',()=>{fSync();renderGrid()});
+$('#fClear').addEventListener('click',()=>{$('#fMoto').value='';$('#fAnio').value='';$('#fOrigen').value='';$('#fCamara').value='';$$('#fPiso input').forEach(i=>{i.checked=false});fSync();renderGrid()});
 $('#grid').addEventListener('click',e=>{
   const add=e.target.closest('[data-add]');
   if(add){addToCart(add.dataset.add);return}
@@ -965,6 +990,7 @@ function openFicha(code){
   const rows=[['Código',p.codigo],['Precio',p.precio>0?fmt(p.precio):'Sin precio'],['Existencia',p.existencia],['Ubicación',p.ubicacion||'—'],['Departamento',p.depto||'—']];
   if(p.pzas>1)rows.push(['Piezas por unidad',p.pzas]);
   if(p.origen)rows.push(['Tipo',p.origen==='ORIGINAL'?'Original':'Genérica']);
+  if(p.piso)rows.push(['Piso de la llanta',PISO_TXT[p.piso]||p.piso]);
   if(p.camara)rows.push(['Llanta',p.camara==='SI'?'Usa cámara':'Sin cámara (tubeless)']);
   if(p.motos)rows.push(['Compatible con',p.motos]);
   if(p.equiv&&p.equiv.length)rows.push(['Códigos originales',p.equiv.join(', ')]);
@@ -1024,7 +1050,42 @@ $('#prCancel').addEventListener('click',()=>closeM('#mPrice'));
 /* ===================================================================
    COBRO
    =================================================================== */
-function payDue(){const t=Math.round(cartTotal()*100)/100;return S.nc?Math.max(0,Math.round((t-S.nc.aplicado)*100)/100):t}
+function payDue(){const t=Math.round(cartTotal()*100)/100;const a=S.nc?Math.max(0,Math.round((t-S.nc.aplicado)*100)/100):t;return Math.max(0,Math.round((a-ptMonto())*100)/100)}
+/* ---- puntos del repartidor en el cobro ---- */
+function telNorm(v){let t=String(v||'').replace(/\D/g,'');if(t.length===12&&t.indexOf('52')===0)t=t.slice(2);return t}
+function ptAntes(){const t=Math.round(cartTotal()*100)/100;return S.nc?Math.max(0,Math.round((t-S.nc.aplicado)*100)/100):t}
+function ptUsarN(){if(!S.pt)return 0;const n=Math.floor(Number($('#ptUsar').value)||0);if(n<=0)return 0;const m=Math.min(n,S.pt.saldo);return Math.min(m,Math.ceil(Math.min(m*S.pt.valor,ptAntes())/S.pt.valor-1e-9))}
+function ptMonto(){if(!S.pt)return 0;const n=Math.min(Math.floor(Number($('#ptUsar').value)||0),S.pt.saldo);return n>0?Math.round(Math.min(n*S.pt.valor,ptAntes())*100)/100:0}
+function ptInfo(){
+  const e=$('#ptInfo');if(!S.pt){return}
+  const gan=Math.max(0,Math.floor(payDue()/100*S.pt.por100+1e-9)),u=ptUsarN();
+  e.style.color='var(--ok)';
+  e.textContent=S.pt.nombre+' · '+S.pt.saldo+' puntos ('+fmt(S.pt.saldo*S.pt.valor)+')'+(u>0?' · usa '+u+' pts = −'+fmt(ptMonto()):'')+' · ganará '+gan+' pts';
+}
+async function ptBuscar(){
+  const tel=telNorm($('#ptTel').value);S.pt=null;$('#ptReg').hidden=true;$('#ptUse').hidden=true;$('#ptUsar').value='0';
+  const e=$('#ptInfo');e.style.color='var(--danger)';
+  if(!/^\d{10}$/.test(tel)){e.textContent='El celular debe tener 10 dígitos.';updatePay();return}
+  try{
+    const j=await api('findCliente',{telefono:tel});
+    if(!j.cliente){e.style.color='var(--muted)';e.textContent='Ese celular no está registrado. Escribe el nombre para darlo de alta.';$('#ptReg').hidden=false;setTimeout(()=>$('#ptNom').focus(),50)}
+    else if(!j.cliente.activo){e.textContent='Ese repartidor está desactivado.'}
+    else{S.pt={tel:tel,nombre:j.cliente.nombre,saldo:j.cliente.puntos,valor:j.valor,por100:j.por100};$('#ptUse').hidden=j.cliente.puntos<=0;ptInfo()}
+  }catch(x){if(x.code!=='SESION')e.textContent=x.message}
+  buildQuick();updatePay();
+}
+async function ptRegistrar(){
+  const tel=telNorm($('#ptTel').value),nom=$('#ptNom').value.trim();const e=$('#ptInfo');
+  try{await api('saveCliente',{telefono:tel,nombre:nom});$('#ptNom').value='';await ptBuscar()}
+  catch(x){if(x.code!=='SESION'){e.style.color='var(--danger)';e.textContent=x.message}}
+}
+$('#ptToggle').addEventListener('click',()=>{const f=$('#ptForm');f.hidden=!f.hidden;if(!f.hidden)setTimeout(()=>$('#ptTel').focus(),50)});
+$('#ptFind').addEventListener('click',ptBuscar);
+$('#ptTel').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();ptBuscar()}});
+$('#ptNom').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();ptRegistrar()}});
+$('#ptRegBtn').addEventListener('click',ptRegistrar);
+$('#ptMax').addEventListener('click',()=>{if(!S.pt)return;$('#ptUsar').value=String(Math.min(S.pt.saldo,Math.ceil(ptAntes()/S.pt.valor-1e-9)));ptInfo();$('#recv').value='';buildQuick();updatePay()});
+$('#ptUsar').addEventListener('input',()=>{ptInfo();$('#recv').value='';buildQuick();updatePay()});
 function buildQuick(){
   const t=payDue();
   const opts=[t];[50,100,200,500,1000].forEach(n=>{if(n>=t&&opts.indexOf(n)<0)opts.push(n)});
@@ -1035,6 +1096,7 @@ function openPay(){
   const pend=batPend();
   if(pend){S.batThenPay=true;toast('Captura la serie y el voltaje de cada batería');openBat(pend.codigo);return}
   S.nc=null;$('#ncForm').hidden=true;$('#ncFolio').value='';$('#ncInfo').textContent='';
+  S.pt=null;$('#ptForm').hidden=true;$('#ptTel').value='';$('#ptNom').value='';$('#ptReg').hidden=true;$('#ptUse').hidden=true;$('#ptUsar').value='0';$('#ptInfo').textContent='';
   $('#payTotal').textContent=fmt(cartTotal());
   S.pay='Efectivo';$$('#payMethods button').forEach(b=>b.classList.toggle('on',b.dataset.m==='Efectivo'));
   $('#recv').value='';buildQuick();
@@ -1066,7 +1128,7 @@ async function ncApply(){
       ncMsg(n.folio+' · saldo '+fmt(n.saldo)+' · vence '+fdmy(n.vence)+'. Se aplican '+fmt(S.nc.aplicado)+(resto>0.004?'; faltan por pagar '+fmt(resto)+'.':'; la venta queda cubierta.'+(n.saldo>t?' Quedan '+fmt(n.saldo-t)+' en la nota.':'')))
     }
   }catch(e){S.nc=null;if(e.code!=='SESION')ncMsg(e.message,true)}
-  b.disabled=false;$('#recv').value='';buildQuick();updatePay();
+  b.disabled=false;$('#recv').value='';buildQuick();ptInfo();updatePay();
 }
 $('#ncToggle').addEventListener('click',()=>{const f=$('#ncForm');f.hidden=!f.hidden;if(!f.hidden)setTimeout(()=>$('#ncFolio').focus(),50)});
 $('#ncApply').addEventListener('click',ncApply);
@@ -1093,13 +1155,14 @@ async function confirmarVenta(){
   }
   S.busy=true;const btn=$('#payOk');btn.disabled=true;btn.textContent='Guardando…';
   try{
-    const j=await api('saveSale',{metodo:S.pay,recibido:rec,items:items,auth:auth,notaFolio:S.nc?S.nc.folio:'',mecanico:S.mec?S.mec.codigo:''});
+    const j=await api('saveSale',{metodo:S.pay,recibido:rec,items:items,auth:auth,notaFolio:S.nc?S.nc.folio:'',mecanico:S.mec?S.mec.codigo:'',clienteTel:S.pt?S.pt.tel:'',puntosUsar:ptUsarN()});
     const v=j.venta;S.lastSale=v;
     v.items.forEach(it=>{const p=getP(it.codigo);if(p)p.existencia=Math.max(0,p.existencia-it.qty)});
-    S.cart=[];S.auth=null;S.nc=null;S.mec=null;
+    S.cart=[];S.auth=null;S.nc=null;S.pt=null;S.mec=null;
     closeM('#mPay');$('#cart').classList.remove('open');
     $('#dFolio').textContent=v.folio;
     $('#dInfo').textContent=fmt(v.total)+' · '+v.metodo+(v.mecanico?' · mecánico '+v.mecanico:'')+(v.nota?' · nota '+v.nota.folio+' −'+fmt(v.nota.aplicado)+(v.nota.saldo>0?' (quedan '+fmt(v.nota.saldo)+')':''):'');
+    if(v.puntos)$('#dInfo').textContent+=' · '+v.puntos.nombre+': '+(v.puntos.usados?'usó '+v.puntos.usados+' pts, ':'')+'ganó '+v.puntos.ganados+' pts (saldo '+v.puntos.saldo+')';
     $('#dChange').textContent=v.metodo==='Efectivo'?'Cambio: '+fmt(v.cambio):'';
     openM('#mDone');renderAll();
     loadCatalog().then(renderAll).catch(()=>{});
@@ -1332,7 +1395,7 @@ function admEdit(code,isNew){
   $('#epEx').value=p?(p.existReal!==undefined?p.existReal:p.existencia):0;$('#epUb').value=p?p.ubicacion:'';$('#epDep').value=p?p.depto:'';$('#epPz').value=p?p.pzas:1;
   $('#epFijo').innerHTML='<option value="">(ninguno)</option>'+PROVS.map(v=>'<option'+(p&&String(p.fijo||'').toUpperCase()===v?' selected':'')+'>'+v+'</option>').join('');
   $('#dlDeps').innerHTML=Array.from(new Set(S.prods.map(x=>x.depto).filter(Boolean))).sort().map(d=>'<option value="'+esc(d)+'">').join('');
-  $('#epMotos').value=p?(p.motos||''):'';$('#epEquiv').value=p?(p.equiv||[]).join(', '):'';$('#epOrigen').value=p?(p.origenManual||''):'';$('#epCamara').value=p?(p.camara||''):'';
+  $('#epMotos').value=p?(p.motos||''):'';$('#epEquiv').value=p?(p.equiv||[]).join(', '):'';$('#epOrigen').value=p?(p.origenManual||''):'';$('#epCamara').value=p?(p.camara||''):'';$('#epPiso').value=p?(p.piso||''):'';
   $('#epPhotoBox').hidden=!!isNew;
   $('#epPhoto').innerHTML='<span class="ini">'+esc(p?(p.desc||'?').trim().charAt(0).toUpperCase():'+')+'</span>'+(p&&p.foto?'<img src="'+esc(fotoUrl(p.foto,600))+'" alt="">':'');
   $('#epPhotoMsg').textContent=isNew?'Guarda el producto primero; después podrás agregar su foto.':'';
@@ -1349,7 +1412,7 @@ async function admSaveProd(){
   if(pz===''||!/^\d+$/.test(pz)||Number(pz)<1){err.textContent='Piezas por unidad: un entero de 1 o más.';return}
   if(pmRaw!==''&&(isNaN(Number(pmRaw))||Number(pmRaw)<0)){err.textContent='El precio manual no es válido.';return}
   if(A.editNew&&!(Number(pmRaw)>0)){err.textContent='Un producto nuevo necesita un precio manual mayor a 0.';return}
-  const data={codigo:cod,existencia:Number(ex),ubicacion:$('#epUb').value.trim(),depto:$('#epDep').value.trim(),pzas:Number(pz),fijo:$('#epFijo').value,pmanual:pmRaw===''?'':Number(pmRaw),motos:$('#epMotos').value.trim(),equiv:$('#epEquiv').value.trim(),origen:$('#epOrigen').value,camara:$('#epCamara').value};
+  const data={codigo:cod,existencia:Number(ex),ubicacion:$('#epUb').value.trim(),depto:$('#epDep').value.trim(),pzas:Number(pz),fijo:$('#epFijo').value,pmanual:pmRaw===''?'':Number(pmRaw),motos:$('#epMotos').value.trim(),equiv:$('#epEquiv').value.trim(),origen:$('#epOrigen').value,camara:$('#epCamara').value,piso:$('#epPiso').value};
   if(A.editNew){data.nuevo=true;data.dmanual=desc}
   else{const p=getP(A.editCode);if(p&&desc!==p.desc)data.dmanual=desc}
   await busy($('#epSave'),'Guardando…',async()=>{
@@ -1628,7 +1691,7 @@ async function rgGo(el,detalle){
 }
 function rgRender(j){
   const st=[['Ventas',j.num],['Venta neta',fmt(j.total)],['Ticket promedio',fmt(j.ticketPromedio)],['Devuelto',fmt(j.devuelto)],['Descuentos otorgados',fmt(j.descuentoTotal)],
-    ['Notas de crédito emitidas',j.notasEmitidas.num+' · '+fmt(j.notasEmitidas.monto)],['Pagado con notas',fmt(j.pagadoConNotas)],['Abonos de encargos y apartados',(j.abonosEncargos?j.abonosEncargos.num+' · '+fmt(j.abonosEncargos.monto):'—')],['Ventas canceladas',j.canceladas+' · '+fmt(j.canceladoMonto)],['Baterías vendidas',j.baterias]]
+    ['Notas de crédito emitidas',j.notasEmitidas.num+' · '+fmt(j.notasEmitidas.monto)],['Pagado con notas',fmt(j.pagadoConNotas)],['Abonos de encargos y apartados',(j.abonosEncargos?j.abonosEncargos.num+' · '+fmt(j.abonosEncargos.monto):'—')],['Puntos de repartidores',j.puntos?('ganados '+j.puntos.ganados+' · usados '+j.puntos.usados+(j.puntos.devueltos?' · revertidos '+j.puntos.devueltos:'')):'—'],['Ventas canceladas',j.canceladas+' · '+fmt(j.canceladoMonto)],['Baterías vendidas',j.baterias]]
     .concat(Object.keys(j.porMetodo).map(k=>['Cobrado: '+k,fmt(j.porMetodo[k])]),Object.keys(j.porUsuario).map(k=>['Vendedor: '+k,fmt(j.porUsuario[k])]),Object.keys(j.porSucursal).map(k=>['Sucursal: '+k,fmt(j.porSucursal[k])]),Object.keys(j.descuentos).map(k=>['Descuento '+k,fmt(j.descuentos[k])]));
   $('#rgOut').innerHTML='<div class="hint">Del '+fdmy(j.desde)+' al '+fdmy(j.hasta)+(j.sucursal?' · sucursal '+esc(j.sucursal):' · todas las sucursales')+'. La venta neta ya descuenta lo devuelto.</div>'+
     '<div class="stats">'+st.map(x=>'<div class="stat"><small>'+esc(x[0])+'</small><b>'+esc(x[1])+'</b></div>').join('')+'</div>'+
@@ -1675,11 +1738,16 @@ function admAjustes(){
     '<label for="ajDir">Dirección</label><input id="ajDir" value="'+esc(c.Direccion||'')+'">'+
     '<label for="ajLey">Leyenda al pie del ticket</label><textarea id="ajLey" rows="4" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);font:inherit;color:inherit">'+esc(c.Leyenda||'')+'</textarea>'+
     '<div class="okmsg" id="ajMsg"></div><button class="btn auto" data-act="ajSave">Guardar datos</button></div>'+
+    '<div class="acard"><b>Tarjeta de puntos</b> <span class="hint">(repartidores)</span>'+
+    '<label for="ajP100">Puntos que se ganan por cada $100 pagados</label><input id="ajP100" type="number" inputmode="decimal" min="0" max="100" value="'+esc(c.PuntosPor100!==undefined&&c.PuntosPor100!==''?c.PuntosPor100:20)+'">'+
+    '<label for="ajVP">Valor de cada punto en pesos</label><input id="ajVP" type="number" inputmode="decimal" min="0.01" step="0.01" value="'+esc(c.ValorPunto!==undefined&&c.ValorPunto!==''?c.ValorPunto:0.1)+'">'+
+    '<div class="hint" id="ajPEj"></div><div class="okmsg" id="ajPMsg"></div><button class="btn auto" data-act="ajPts">Guardar puntos</button></div>'+
     '<div class="acard"><b>Cambiar mi contraseña</b>'+
     '<label for="pwA">Contraseña actual</label><input id="pwA" type="password" autocomplete="current-password">'+
     '<label for="pwN">Contraseña nueva (mínimo 6 caracteres)</label><input id="pwN" type="password" autocomplete="new-password">'+
     '<label for="pwC">Repite la contraseña nueva</label><input id="pwC" type="password" autocomplete="new-password">'+
     '<div class="err" id="pwErr" role="alert"></div><button class="btn auto" data-act="ajPass" style="margin-top:6px">Cambiar contraseña</button></div>';
+  ajPtsEj();
 }
 async function ajSave(el){
   await busy(el,'Guardando…',async()=>{
@@ -1688,6 +1756,13 @@ async function ajSave(el){
       S.config=j.config||S.config;$('#bizTitle').textContent=S.config.Negocio||'Punto de Venta';document.title=S.config.Negocio||'Punto de Venta';
       $('#ajMsg').textContent='Guardado ✓';
     }catch(e){failToast(e)}
+  });
+}
+function ajPtsEj(){const a=Number($('#ajP100').value),v=Number($('#ajVP').value);if(a>=0&&v>0)$('#ajPEj').textContent='Ejemplo: en una compra de $100 el repartidor gana '+a+' puntos = '+fmt(a*v)+' ('+(Math.round(a*v)+'% aprox.')+').'}
+async function ajPts(el){
+  await busy(el,'Guardando…',async()=>{
+    try{const j=await api('saveConfig',{PuntosPor100:$('#ajP100').value.trim(),ValorPunto:$('#ajVP').value.trim()});S.config=j.config||S.config;$('#ajPMsg').textContent='Guardado ✓';ajPtsEj()}
+    catch(e){failToast(e)}
   });
 }
 async function ajPass(el){
@@ -1724,15 +1799,102 @@ $('#encX').addEventListener('click',encClose);
 $('#encTabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b)encTab(b.dataset.t)});
 const encBody=()=>$('#encBody');
 
+
+/* ---- listas de proveedor en el dispositivo (solo código, descripción y precio al público) ---- */
+const LST={items:null,fecha:'',cargando:null};
+const compactTxt=t=>norm(t).replace(/[^a-z0-9]/g,'');
+function lstPrepare(arr){
+  return arr.map(a=>{const o={codigo:a[0],desc:a[1],precio:a[2],apl:a[3]||'',motos:a[4]||'',prov:a[5]||''};o._mt=parseMotos(o.motos);o._n=norm(o.codigo+' '+o.desc+' '+o.apl+' '+o.motos);o._c=compactTxt(o.desc+' '+o.apl);return o});
+}
+async function ensureListas(force){
+  if(LST.cargando)return LST.cargando;
+  if(!force&&LST.items)return;
+  if(!force){
+    try{const c=JSON.parse(localStorage.getItem('pos_listas_v1')||'null');if(c&&c.items&&c.ts&&Date.now()-c.ts<12*3600*1000){LST.items=lstPrepare(c.items);LST.fecha=c.fecha||'';return}}catch(e){}
+  }
+  LST.cargando=(async()=>{
+    try{
+      const j=await api('catalogoListas');LST.items=lstPrepare(j.items||[]);LST.fecha=j.fecha||'';
+      try{localStorage.setItem('pos_listas_v1',JSON.stringify({ts:Date.now(),fecha:LST.fecha,items:j.items||[]}))}catch(e){}
+    }finally{LST.cargando=null}
+  })();
+  return LST.cargando;
+}
+function encListInfo(){
+  const o=$('#enListInfo');if(!o)return;
+  o.innerHTML=LST.cargando?'Cargando listas de proveedor…':(LST.items?'Listas: '+LST.items.length.toLocaleString('es-MX')+' códigos que aún no están en el inventario'+(LST.fecha?' · al '+fdmy(LST.fecha):'')+' · <button class="link" type="button" data-enact="refresh">Actualizar listas</button>':'Las listas no están cargadas.');
+}
+function enResultados(q,motoTxt){
+  const words=norm(q).split(/\s+/).filter(Boolean),mf=motoFilter({moto:motoTxt,anio:''}),out=[];
+  const tokOk=(txt)=>mf.tokens.every(t=>txt.indexOf(t)>=0);
+  const exact=String(q||'').trim().toUpperCase();
+  if(!words.length&&!mf.on)return[];
+  S.prods.forEach(p=>{
+    if(p.bateria)return;
+    if(!words.every(w=>p._n.indexOf(w)>=0))return;
+    if(mf.on&&!(motoMatch(p,mf)||(!p._mt.length&&tokOk(compactTxt(p.desc)))))return;
+    out.push({codigo:p.codigo,desc:p.desc,precio:p.precio,enInv:true,existencia:p.existencia,motos:p.motos});
+  });
+  (LST.items||[]).forEach(it=>{
+    if(S.byCode[it.codigo.toUpperCase()])return;
+    if(!words.every(w=>it._n.indexOf(w)>=0))return;
+    if(mf.on&&!(it._mt.length?motoMatch(it,mf):tokOk(it._c)))return;
+    out.push({codigo:it.codigo,desc:it.desc,precio:it.precio,enInv:false,existencia:0,motos:it.motos,lista:true});
+  });
+  out.sort((a,b)=>((b.codigo.toUpperCase()===exact)-(a.codigo.toUpperCase()===exact))||((b.enInv?1:0)-(a.enInv?1:0))||a.codigo.localeCompare(b.codigo));
+  return out;
+}
+function enSearch(){
+  const box=$('#enRes');if(!box)return;
+  const q=$('#enQ')?$('#enQ').value:'',m=$('#enMoto')?$('#enMoto').value:'';
+  if(!norm(q).trim()&&!norm(m).trim()){box.innerHTML='';return}
+  const all=enResultados(q,m),l=all.slice(0,25),admin=S.user&&S.user.rol==='admin';
+  box.innerHTML=(l.length?l.map(r=>'<div class="aprow"><span style="min-width:0;overflow-wrap:anywhere"><b>'+esc(r.desc||r.codigo)+'</b><small class="hint" style="display:block;margin:0">'+esc(r.codigo)+' · '+(r.enInv?'<span style="color:var(--ok)">en inventario · hay '+r.existencia+'</span>':'solo en lista')+(r.motos?' · '+esc(r.motos):'')+'</small></span>'+
+    '<span style="display:flex;gap:6px;align-items:center;flex:0 0 auto"><b>'+fmt(r.precio)+'</b>'+(admin&&!r.enInv?'<button class="mini" type="button" data-enact="moto" data-c="'+esc(r.codigo)+'" aria-label="Poner moto">Moto</button>':'')+'<button class="mini" type="button" data-enact="add" data-c="'+esc(r.codigo)+'" aria-label="Agregar">+</button></span></div>').join('')+(all.length>25?'<div class="hint">Mostrando 25 de '+all.length+'. Escribe más para afinar.</div>':''):'<div class="hint">Sin resultados.</div>');
+}
+function enAddResult(codigo){
+  const r=enResultados(codigo,'').find(x=>x.codigo.toUpperCase()===String(codigo).toUpperCase());if(!r)return;
+  const q=parseInt($('#enQty').value,10)||1,err=$('#enErr');if(err)err.textContent='';
+  if(q<1||q>999){if(err)err.textContent='La cantidad debe ser de 1 a 999.';return}
+  const ex=E.items.find(i=>i.codigo.toUpperCase()===r.codigo.toUpperCase());
+  if(ex){ex.qty+=q;ex.existencia=r.existencia}else E.items.push({codigo:r.codigo,desc:r.desc,precio:r.precio,existencia:r.existencia,enInv:r.enInv,qty:q});
+  $('#enQty').value='1';encItems();toast('Agregada: '+r.codigo);
+}
+async function enSetMoto(codigo){
+  const it=(LST.items||[]).find(x=>x.codigo.toUpperCase()===String(codigo).toUpperCase());if(!it)return;
+  const v=prompt('Motos compatibles de '+it.codigo+' (separa con ;  Ej: ITALIKA FT150 2012-2022; VENTO XVE 150 2018+). Escribe UNIVERSAL si sirve para todas:',it.motos||'');
+  if(v===null)return;
+  try{
+    await api('saveMotosLista',{codigo:it.codigo,motos:v});
+    it.motos=v.replace(/[\r\n]+/g,'; ').trim();it._mt=parseMotos(it.motos);it._n=norm(it.codigo+' '+it.desc+' '+it.apl+' '+it.motos);
+    try{const c=JSON.parse(localStorage.getItem('pos_listas_v1')||'null');if(c){const a=c.items.find(x=>String(x[0]).toUpperCase()===it.codigo.toUpperCase());if(a){a[4]=it.motos;localStorage.setItem('pos_listas_v1',JSON.stringify(c))}}}catch(e){}
+    toast('Moto guardada');enSearch();
+  }catch(e){failToast(e)}
+}
+$('#encBody').addEventListener('click',e=>{
+  const b=e.target.closest('[data-enact]');if(!b)return;
+  if(b.dataset.enact==='add')enAddResult(b.dataset.c);
+  else if(b.dataset.enact==='moto')enSetMoto(b.dataset.c);
+  else if(b.dataset.enact==='refresh'){encListInfo();const o=$('#enListInfo');if(o)o.textContent='Actualizando listas…';ensureListas(true).then(()=>{encListInfo();enSearch()}).catch(er=>{if(o)o.textContent='No se pudieron cargar las listas: '+errMsg(er)})}
+});
+$('#encBody').addEventListener('input',e=>{if(e.target.id==='enQ'||e.target.id==='enMoto'){clearTimeout(enT);enT=setTimeout(enSearch,150)}});
+let enT;
+$('#encBody').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target.id==='enQ'){e.preventDefault();const f=$('#enRes [data-enact="add"]');if(f)enAddResult(f.dataset.c)}
+});
+
 /* ---- Nuevo encargo / cotización ---- */
 function encNuevo(){
   encBody().innerHTML=
     '<div class="acard"><b>Cliente</b><div class="row" style="margin-top:6px"><input id="enCli" placeholder="Nombre del cliente" maxlength="60" autocomplete="off" value="'+esc(E.cli)+'"><input id="enTel" placeholder="Teléfono (10 dígitos)" inputmode="tel" maxlength="16" autocomplete="off" value="'+esc(E.tel)+'"></div></div>'+
-    '<div class="acard"><b>Piezas</b><div class="hint">Escribe el código de la pieza (del inventario o de tus listas de proveedor). El precio se calcula solo.</div>'+
-    '<div class="row" style="margin-top:6px"><input id="enCod" placeholder="Código" autocomplete="off" autocapitalize="characters"><input id="enQty" type="number" inputmode="numeric" min="1" value="1" style="max-width:80px" aria-label="Cantidad"><button class="btn auto" id="enAdd" type="button" style="flex:0 0 auto">Agregar</button></div>'+
+    '<div class="acard"><b>Buscar piezas</b><div class="hint">Busca en tu inventario y en todas las listas de proveedor (precio al público). Para filtrar por moto escribe el modelo y, si quieres, el año.</div>'+
+    '<div class="row" style="margin-top:6px"><input id="enQ" placeholder="Código o descripción" autocomplete="off"><input id="enQty" type="number" inputmode="numeric" min="1" value="1" style="max-width:80px" aria-label="Cantidad"></div>'+
+    '<input id="enMoto" placeholder="Moto (ej. FT150, XVE 2019)" autocomplete="off" style="margin-top:6px"><div class="hint" id="enListInfo" style="margin-top:6px"></div><div id="enRes" style="margin-top:6px"></div>'+
+    '<div class="hint" style="margin-top:8px">¿Ya sabes el código exacto? Agrégalo directo:</div>'+
+    '<div class="row" style="margin-top:4px"><input id="enCod" placeholder="Código exacto" autocomplete="off" autocapitalize="characters"><button class="btn auto" id="enAdd" type="button" style="flex:0 0 auto">Agregar</button></div>'+
     '<div id="enErr" class="err" role="alert"></div><div id="enItems" style="margin-top:6px"></div></div>'+
     '<div class="acard" id="enPay"></div>';
-  encItems();
+  encItems();encListInfo();enSearch();ensureListas(false).then(()=>{encListInfo();enSearch()}).catch(e=>{const o=$('#enListInfo');if(o)o.textContent='No se pudieron cargar las listas: '+errMsg(e)});
 }
 function encItems(){
   const box=$('#enItems');if(!box)return;
@@ -2090,6 +2252,35 @@ const AP={tab:'nuevo',items:[],cli:'',tel:'',metodo:'Efectivo',anticipo:'',recib
 const aTotal=()=>r2(AP.items.reduce((a,i)=>a+i.precio*i.qty,0));
 const aMin=()=>{const t=aTotal(),pct=Number(S.config&&S.config.ApartadoPct)||0;return t>0?Math.max(0.01,r2(Math.ceil(t*pct-1e-9)/100)):0};
 const aptBody=()=>$('#aptBody');
+/* ---- ventana "Puntos" (consulta, alta y ajuste) ---- */
+function ptsOpen(){$('#ptsTel').value='';$('#ptsOut').innerHTML='';openM('#mPts');setTimeout(()=>$('#ptsTel').focus(),50)}
+async function ptsBuscar(){
+  const tel=telNorm($('#ptsTel').value),o=$('#ptsOut');
+  if(!/^\d{10}$/.test(tel)){o.innerHTML='<div class="err">El celular debe tener 10 dígitos.</div>';return}
+  try{
+    const j=await api('findCliente',{telefono:tel});const c=j.cliente;
+    if(!c){o.innerHTML='<div class="hint">Ese celular no está registrado. Escribe el nombre del repartidor:</div><div class="fr"><input id="ptsNom" maxlength="60" aria-label="Nombre del repartidor"><button class="btn auto" data-pa="reg" data-tel="'+tel+'">Registrar</button></div>';return}
+    const T={GANADOS:'Ganó',USADOS:'Usó',DEVUELTOS:'Devolución',AJUSTE:'Ajuste'};
+    o.innerHTML='<div class="acard"><b>'+esc(c.nombre)+'</b> · '+esc(c.telefono)+(c.activo?'':' <span class="err">(desactivado)</span>')+
+      '<div style="font-size:28px;font-weight:800;margin:4px 0">'+c.puntos+' pts</div><div class="hint">Equivalen a '+fmt(c.puntos*j.valor)+' · gana '+j.por100+' pts por cada $100 pagados</div>'+
+      (c.movs.length?'<div style="margin-top:8px;font-size:14px">'+c.movs.map(m=>'<div class="fr" style="justify-content:space-between"><span>'+fdmy(m.fecha)+' · '+(T[m.tipo]||m.tipo)+(m.folio?' · '+esc(m.folio):'')+'</span><b>'+(m.puntos>0?'+':'')+m.puntos+'</b></div>').join('')+'</div>':'<div class="hint">Sin movimientos todavía.</div>')+'</div>'+
+      (S.user.rol==='admin'?'<div class="acard"><b>Administrador</b><label for="ptsNom">Nombre</label><input id="ptsNom" maxlength="60" value="'+esc(c.nombre)+'"><label class="chk"><input type="checkbox" id="ptsAct"'+(c.activo?' checked':'')+'> Activo</label><button class="btn auto sec" data-pa="edit" data-tel="'+c.telefono+'">Guardar nombre / estado</button>'+
+        '<label for="ptsAj">Ajustar puntos (+ suma, − resta)</label><input id="ptsAj" type="number" step="1" inputmode="numeric"><label for="ptsMot">Motivo</label><input id="ptsMot" maxlength="60"><button class="btn auto sec" data-pa="aj" data-tel="'+c.telefono+'">Aplicar ajuste</button></div>':'');
+  }catch(e){if(e.code!=='SESION')o.innerHTML='<div class="err">'+esc(e.message)+'</div>'}
+}
+$('#btnPts').addEventListener('click',ptsOpen);
+$('#ptsFind').addEventListener('click',ptsBuscar);
+$('#ptsTel').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();ptsBuscar()}});
+$('#ptsClose').addEventListener('click',()=>closeM('#mPts'));
+$('#ptsOut').addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-pa]');if(!b)return;const tel=b.dataset.tel,a=b.dataset.pa;
+  try{
+    if(a==='reg')await api('saveCliente',{telefono:tel,nombre:$('#ptsNom').value.trim()});
+    else if(a==='edit')await api('saveCliente',{telefono:tel,nombre:$('#ptsNom').value.trim(),activo:$('#ptsAct').checked});
+    else if(a==='aj'){await api('ajustePuntos',{telefono:tel,puntos:Number($('#ptsAj').value),motivo:$('#ptsMot').value.trim()});toast('Ajuste aplicado')}
+    ptsBuscar();
+  }catch(x){if(x.code!=='SESION')toast(x.message)}
+});
 function aptOpen(){$('#apt').hidden=false;document.body.style.overflow='hidden';aptTab(AP.tab||'nuevo')}
 function aptClose(){$('#apt').hidden=true;document.body.style.overflow=S.admOpen?'hidden':'';closeM('#mEncPay');closeM('#mEtq')}
 function aptTab(t){AP.tab=t;$$('#aptTabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$('#apt').scrollTop=0;if(t==='nuevo')aptNuevo();else aptList()}
@@ -2243,6 +2434,7 @@ const ACT={
   rgCsv(el){return rgGo(el,true)},
   bsGo(el){return bsGo(el)},
   ajSave(el){return ajSave(el)},
+  ajPts(el){return ajPts(el)},
   ajPass(el){return ajPass(el)}
 };
 Object.assign(ACT,PED_ACT);
@@ -2374,6 +2566,11 @@ function buildTicket(v,cfg){
     }
     k.text('Pago: '+v.metodo,20);
     if(v.metodo==='Efectivo'){k.pair('Recibido',fmt(v.recibido),20);k.pair('Cambio',fmt(v.cambio),22,{bold:1})}
+    if(v.puntos){
+      if(v.puntos.usados>0){k.pair('Puntos usados ('+v.puntos.usados+')','-'+fmt(v.puntos.montoUsado),18);if(!v.nota&&v.resto>0.004)k.pair('Por pagar',fmt(v.resto),20,{bold:1})}
+      k.text('Repartidor: '+v.puntos.nombre,18);
+      k.text('Puntos ganados: '+v.puntos.ganados+' · Saldo: '+v.puntos.saldo+' pts',18,{bold:1});
+    }
     if(v.nota)k.text('Saldo de la nota: '+fmt(v.nota.saldo)+(v.nota.saldo>0.004?' · vence '+fdmy(v.nota.vence):''),16);
   }
   k.rule(true);
