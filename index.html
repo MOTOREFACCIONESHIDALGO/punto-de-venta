@@ -1945,7 +1945,9 @@ function enSearch(){
 // cuando no hay resultados, dice qué filtro los está escondiendo
 function enVacio(q,m){
   const tieneMoto=!!norm(m).trim(),tieneProv=(E.provSel||[]).length>0,h=[];
-  if(tieneMoto){const n=enResultados(q,'').length;if(n)h.push('Sin el filtro de moto "'+esc(m.trim())+'" hay '+n+' resultado(s) · <button class="link" type="button" data-enact="nomoto" style="width:auto;margin:0;padding:0">quitar moto</button>')}
+  if(tieneMoto){const rs=enResultados(q,'');if(rs.length){
+    h.push('Sin el filtro de moto "'+esc(m.trim())+'" hay '+rs.length+' resultado(s) · <button class="link" type="button" data-enact="nomoto" style="width:auto;margin:0;padding:0">quitar moto</button>');
+    h.push('<small>Así vienen en la lista (no traen "'+esc(m.trim())+'"):</small>'+rs.slice(0,4).map(r=>'<small style="display:block;margin:2px 0 0;overflow-wrap:anywhere">• '+esc(r.codigo)+' · '+esc(r.desc)+(r.fit?' — '+esc(r.fit):'')+'</small>').join(''))}}
   if(tieneProv){const n=enResultados(q,m,[]).length;if(n)h.push('En todas las listas e inventario hay '+n+' · <button class="link" type="button" data-enact="noprov" style="width:auto;margin:0;padding:0">quitar proveedor</button>')}
   if(tieneMoto&&tieneProv){const n=enResultados(q,'',[]).length;if(n)h.push('Sin moto ni proveedor hay '+n)}
   return '<div class="hint">Sin resultados.'+(h.length?'<br>'+h.join('<br>'):'<br>Prueba con menos palabras (solo la pieza, por ejemplo "cople carburador") o con otra escritura.')+'</div>';
