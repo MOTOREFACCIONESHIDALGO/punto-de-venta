@@ -1870,21 +1870,36 @@ function descMatch(o,mf){
   if(mf.anio!=null&&d.yrs.length&&!d.yrs.some(r=>mf.anio>=r[0]&&mf.anio<=r[1]))return false;
   return mf.tokens.length>0||(mf.anio!=null&&d.yrs.length>0);
 }
+// Búsqueda tolerante: ignora "de/del/para…", perdona una letra mal escrita ("carbutador" = "carburador") y acepta abreviaturas ("carb")
+const STOPW=['de','del','la','el','los','las','para','y','con','en','a','un','una'];
+function editDist(a,b,lim){
+  if(a===b)return 0;const la=a.length,lb=b.length;if(Math.abs(la-lb)>lim)return lim+1;
+  let prev=[];for(let j=0;j<=lb;j++)prev[j]=j;
+  for(let i=1;i<=la;i++){const cur=[i];let mn=i;for(let j=1;j<=lb;j++){const v=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));cur[j]=v;if(v<mn)mn=v}if(mn>lim)return lim+1;prev=cur}
+  return prev[lb];
+}
+function wordHit(o,w){
+  if(o._n.indexOf(w)>=0)return true;
+  if(w.length<4)return false;
+  const tk=o._tk||(o._tk=Array.from(new Set(o._n.split(/[^a-z0-9]+/).filter(Boolean)))),lim=w.length>=8?2:1;
+  return tk.some(t=>(t.length>=4&&t.length<w.length&&w.indexOf(t)===0)||(t.length>=4&&editDist(t,w,lim)<=lim));
+}
+function qWords(q){const w=norm(q).split(/\s+/).filter(Boolean),k=w.filter(x=>STOPW.indexOf(x)<0);return k.length?k:w}
 function enResultados(q,motoTxt){
-  const words=norm(q).split(/\s+/).filter(Boolean),mf=motoFilter({moto:motoTxt,anio:''}),out=[];
+  const words=qWords(q),mf=motoFilter({moto:motoTxt,anio:''}),out=[];
   const exact=String(q||'').trim().toUpperCase();
   if(!words.length&&!mf.on&&!(E.provSel||[]).length)return[];
   const ps=E.provSel||[],invOk=!ps.length||ps.indexOf('INVENTARIO')>=0;
   if(invOk)S.prods.forEach(p=>{
     if(p.bateria)return;
-    if(!words.every(w=>p._n.indexOf(w)>=0))return;
+    if(!words.every(w=>wordHit(p,w)))return;
     if(mf.on&&!(motoMatch(p,mf)||descMatch(p,mf)))return;
     out.push({codigo:p.codigo,desc:p.desc,precio:p.precio,enInv:true,existencia:p.existencia,motos:p.motos});
   });
   (LST.items||[]).forEach(it=>{
     if(S.byCode[it.codigo.toUpperCase()])return;
     if(ps.length&&ps.indexOf(String(it.prov).toUpperCase())<0)return;
-    if(!words.every(w=>it._n.indexOf(w)>=0))return;
+    if(!words.every(w=>wordHit(it,w)))return;
     if(mf.on&&!(motoMatch(it,mf)||descMatch(it,mf)))return;
     out.push({codigo:it.codigo,desc:it.desc,precio:it.precio,enInv:false,existencia:0,motos:it.motos,lista:true});
   });
