@@ -1855,23 +1855,37 @@ $('#encBody').addEventListener('change',e=>{
   if(c.checked&&i<0)E.provSel.push(v);else if(!c.checked&&i>=0)E.provSel.splice(i,1);
   enSearch();
 });
+// La moto también se busca dentro de la descripción (así vienen las listas, p. ej. "BALATA FT150/FT125 2012-2022"):
+// cada palabra del modelo debe aparecer en el texto; si el texto trae años y se pidió un año, debe caer en algún rango
+function descMoto(o){
+  if(o._dm)return o._dm;
+  const t=norm(String(o.desc||'')+' '+String(o.apl||'')),yrs=[];let m;
+  const re=/((?:19|20)\d{2})\s*(?:-|a|al|hasta)\s*((?:19|20)\d{2})|((?:19|20)\d{2})\s*(\+|en adelante|y mas)|\b((?:19|20)\d{2})\b/g;
+  while((m=re.exec(t))){if(m[1])yrs.push([+m[1],+m[2]]);else if(m[3])yrs.push([+m[3],9999]);else yrs.push([+m[5],+m[5]])}
+  return(o._dm={c:compactTxt(t.replace(/\b(?:19|20)\d{2}\b/g,' ')),yrs:yrs});
+}
+function descMatch(o,mf){
+  const d=descMoto(o);
+  if(mf.tokens.length&&!mf.tokens.every(t=>d.c.indexOf(t)>=0))return false;
+  if(mf.anio!=null&&d.yrs.length&&!d.yrs.some(r=>mf.anio>=r[0]&&mf.anio<=r[1]))return false;
+  return mf.tokens.length>0||(mf.anio!=null&&d.yrs.length>0);
+}
 function enResultados(q,motoTxt){
   const words=norm(q).split(/\s+/).filter(Boolean),mf=motoFilter({moto:motoTxt,anio:''}),out=[];
-  const tokOk=(txt)=>mf.tokens.every(t=>txt.indexOf(t)>=0);
   const exact=String(q||'').trim().toUpperCase();
   if(!words.length&&!mf.on&&!(E.provSel||[]).length)return[];
   const ps=E.provSel||[],invOk=!ps.length||ps.indexOf('INVENTARIO')>=0;
   if(invOk)S.prods.forEach(p=>{
     if(p.bateria)return;
     if(!words.every(w=>p._n.indexOf(w)>=0))return;
-    if(mf.on&&!(motoMatch(p,mf)||(!p._mt.length&&tokOk(compactTxt(p.desc)))))return;
+    if(mf.on&&!(motoMatch(p,mf)||descMatch(p,mf)))return;
     out.push({codigo:p.codigo,desc:p.desc,precio:p.precio,enInv:true,existencia:p.existencia,motos:p.motos});
   });
   (LST.items||[]).forEach(it=>{
     if(S.byCode[it.codigo.toUpperCase()])return;
     if(ps.length&&ps.indexOf(String(it.prov).toUpperCase())<0)return;
     if(!words.every(w=>it._n.indexOf(w)>=0))return;
-    if(mf.on&&!(it._mt.length?motoMatch(it,mf):tokOk(it._c)))return;
+    if(mf.on&&!(motoMatch(it,mf)||descMatch(it,mf)))return;
     out.push({codigo:it.codigo,desc:it.desc,precio:it.precio,enInv:false,existencia:0,motos:it.motos,lista:true});
   });
   out.sort((a,b)=>((b.codigo.toUpperCase()===exact)-(a.codigo.toUpperCase()===exact))||((b.enInv?1:0)-(a.enInv?1:0))||a.codigo.localeCompare(b.codigo));
