@@ -1739,13 +1739,13 @@ async function venLoad(){
 /* ---------- Ajustes ---------- */
 function admAjustes(){
   const c=S.config||{};
-  admBody().innerHTML='<div class="acard"><b>Datos del negocio</b> <span class="hint">(salen en el ticket)</span>'+
+  admBody().innerHTML='<div class="acard" id="ajListas"><b>Listas de proveedor para cotizar</b> <span class="hint">(marcadas = los vendedores pueden cotizar con ellas)</span><div id="ajLisBox" class="hint">Cargando…</div><div class="okmsg" id="ajLMsg"></div><button class="btn auto" data-act="ajListas">Guardar listas permitidas</button></div>'+'<div class="hint" style="margin:0 0 8px">Versión de la página: 2026-11-23 (listas por proveedor)</div>'+
+    '<div class="acard"><b>Datos del negocio</b> <span class="hint">(salen en el ticket)</span>'+
     '<label for="ajNeg">Nombre del negocio</label><input id="ajNeg" value="'+esc(c.Negocio||'')+'">'+
     '<label for="ajTel">Teléfono</label><input id="ajTel" inputmode="tel" value="'+esc(c.Telefono||'')+'">'+
     '<label for="ajDir">Dirección</label><input id="ajDir" value="'+esc(c.Direccion||'')+'">'+
     '<label for="ajLey">Leyenda al pie del ticket</label><textarea id="ajLey" rows="4" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);font:inherit;color:inherit">'+esc(c.Leyenda||'')+'</textarea>'+
     '<div class="okmsg" id="ajMsg"></div><button class="btn auto" data-act="ajSave">Guardar datos</button></div>'+
-    '<div class="acard" id="ajListas"><b>Listas de proveedor para cotizar</b> <span class="hint">(marcadas = los vendedores pueden cotizar con ellas)</span><div id="ajLisBox" class="hint">Cargando…</div><div class="okmsg" id="ajLMsg"></div><button class="btn auto" data-act="ajListas">Guardar listas permitidas</button></div>'+
     '<div class="acard"><b>Tarjeta de puntos</b> <span class="hint">(repartidores)</span>'+
     '<label for="ajP100">Puntos que se ganan por cada $100 pagados</label><input id="ajP100" type="number" inputmode="decimal" min="0" max="100" value="'+esc(c.PuntosPor100!==undefined&&c.PuntosPor100!==''?c.PuntosPor100:20)+'">'+
     '<label for="ajVP">Valor de cada punto en pesos</label><input id="ajVP" type="number" inputmode="decimal" min="0.01" step="0.01" value="'+esc(c.ValorPunto!==undefined&&c.ValorPunto!==''?c.ValorPunto:0.1)+'">'+
