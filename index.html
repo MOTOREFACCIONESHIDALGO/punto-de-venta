@@ -369,8 +369,9 @@ textarea{padding:12px;border:1px solid var(--line);border-radius:10px;background
   <div style="font-size:26px;font-weight:800;letter-spacing:.5px" id="dFolio"></div>
   <div class="hint" id="dInfo"></div>
   <div class="change" id="dChange" style="color:var(--ok)"></div>
-  <div class="row" style="margin-top:8px">
+  <div class="row" style="margin-top:8px;flex-wrap:wrap">
     <button class="btn sec" id="dPrint">Imprimir ticket</button>
+    <button class="btn sec" id="dNota" hidden>Imprimir nota de crédito</button>
     <button class="btn" id="dNew">Nueva venta</button>
   </div>
 </div></div>
@@ -1162,6 +1163,7 @@ async function confirmarVenta(){
     closeM('#mPay');$('#cart').classList.remove('open');
     $('#dFolio').textContent=v.folio;
     $('#dInfo').textContent=fmt(v.total)+' · '+v.metodo+(v.mecanico?' · mecánico '+v.mecanico:'')+(v.nota?' · nota '+v.nota.folio+' −'+fmt(v.nota.aplicado)+(v.nota.saldo>0?' (quedan '+fmt(v.nota.saldo)+')':''):'');
+    $('#dNota').hidden=!v.nota;
     if(v.puntos)$('#dInfo').textContent+=' · '+v.puntos.nombre+': '+(v.puntos.usados?'usó '+v.puntos.usados+' pts, ':'')+'ganó '+v.puntos.ganados+' pts (saldo '+v.puntos.saldo+')';
     $('#dChange').textContent=v.metodo==='Efectivo'?'Cambio: '+fmt(v.cambio):'';
     openM('#mDone');renderAll();
@@ -1179,6 +1181,11 @@ $('#dNew').addEventListener('click',()=>{
   try{if(window.matchMedia('(pointer:fine)').matches)setTimeout(()=>$('#q').focus(),50)}catch(e){}
 });
 $('#dPrint').addEventListener('click',()=>{if(S.lastSale)window.imprimirTicket(S.lastSale,S.config)});
+$('#dNota').addEventListener('click',async()=>{
+  const v=S.lastSale;if(!v||!v.nota)return;
+  try{const j=await api('creditNote',{folio:v.nota.folio});window.imprimirNota(Object.assign({},j.nota,{saldo:v.nota.saldo,aplicado:v.nota.aplicado}),S.config)}
+  catch(e){if(e.code!=='SESION')toast(e.message)}
+});
 // (La impresión del ticket está en la sección TICKET, más abajo)
 
 /* ===================================================================
@@ -1738,6 +1745,7 @@ function admAjustes(){
     '<label for="ajDir">Dirección</label><input id="ajDir" value="'+esc(c.Direccion||'')+'">'+
     '<label for="ajLey">Leyenda al pie del ticket</label><textarea id="ajLey" rows="4" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);font:inherit;color:inherit">'+esc(c.Leyenda||'')+'</textarea>'+
     '<div class="okmsg" id="ajMsg"></div><button class="btn auto" data-act="ajSave">Guardar datos</button></div>'+
+    '<div class="acard" id="ajListas"><b>Listas de proveedor para cotizar</b> <span class="hint">(marcadas = los vendedores pueden cotizar con ellas)</span><div id="ajLisBox" class="hint">Cargando…</div><div class="okmsg" id="ajLMsg"></div><button class="btn auto" data-act="ajListas">Guardar listas permitidas</button></div>'+
     '<div class="acard"><b>Tarjeta de puntos</b> <span class="hint">(repartidores)</span>'+
     '<label for="ajP100">Puntos que se ganan por cada $100 pagados</label><input id="ajP100" type="number" inputmode="decimal" min="0" max="100" value="'+esc(c.PuntosPor100!==undefined&&c.PuntosPor100!==''?c.PuntosPor100:20)+'">'+
     '<label for="ajVP">Valor de cada punto en pesos</label><input id="ajVP" type="number" inputmode="decimal" min="0.01" step="0.01" value="'+esc(c.ValorPunto!==undefined&&c.ValorPunto!==''?c.ValorPunto:0.1)+'">'+
@@ -1747,7 +1755,19 @@ function admAjustes(){
     '<label for="pwN">Contraseña nueva (mínimo 6 caracteres)</label><input id="pwN" type="password" autocomplete="new-password">'+
     '<label for="pwC">Repite la contraseña nueva</label><input id="pwC" type="password" autocomplete="new-password">'+
     '<div class="err" id="pwErr" role="alert"></div><button class="btn auto" data-act="ajPass" style="margin-top:6px">Cambiar contraseña</button></div>';
-  ajPtsEj();
+  ajPtsEj();ajListasCargar();
+}
+async function ajListasCargar(){
+  try{const j=await api('listasEstado');const b=$('#ajLisBox');if(!b)return;
+    b.innerHTML=j.proveedores.length?j.proveedores.map(p=>'<label class="chk"><input type="checkbox" data-lis="'+esc(p.hoja)+'"'+(p.bloqueada?'':' checked')+'> '+esc(p.hoja)+'</label>').join(''):'No hay hojas de proveedor.'}
+  catch(e){const b=$('#ajLisBox');if(b)b.textContent='No se pudo cargar: '+errMsg(e)}
+}
+async function ajListas(el){
+  const bl=$$('#ajLisBox [data-lis]').filter(c=>!c.checked).map(c=>c.dataset.lis);
+  await busy(el,'Guardando…',async()=>{
+    try{const j=await api('saveConfig',{ListasBloqueadas:bl});S.config=j.config||S.config;try{localStorage.removeItem('pos_listas_v1')}catch(e){}LST.items=null;$('#ajLMsg').textContent=bl.length?'Guardado ✓ · bloqueadas: '+bl.join(', '):'Guardado ✓ · todas permitidas'}
+    catch(e){failToast(e)}
+  });
 }
 async function ajSave(el){
   await busy(el,'Guardando…',async()=>{
@@ -1781,7 +1801,7 @@ async function ajPass(el){
 /* ===================================================================
    ENCARGOS Y COTIZACIONES
    =================================================================== */
-const E={tab:'nuevo',items:[],cli:'',tel:'',metodo:'Efectivo',anticipo:'',recibido:'',pct:40,pend:null,q:'',pay:null};
+const E={provSel:[],tab:'nuevo',items:[],cli:'',tel:'',metodo:'Efectivo',anticipo:'',recibido:'',pct:40,pend:null,q:'',pay:null};
 const eTotal=()=>r2(E.items.reduce((a,i)=>a+i.precio*i.qty,0));
 const eMin=()=>{const t=eTotal();return t>0?r2(Math.ceil(t*E.pct-1e-9)/100):0};
 function encBadge(n){S.encListos=n||0;$('#encBadge').textContent=n>0?String(n):'';$('#encTabBadge').textContent=n>0?String(n):''}
@@ -1801,7 +1821,7 @@ const encBody=()=>$('#encBody');
 
 
 /* ---- listas de proveedor en el dispositivo (solo código, descripción y precio al público) ---- */
-const LST={items:null,fecha:'',cargando:null};
+const LST={items:null,fecha:'',cargando:null,provs:[]};
 const compactTxt=t=>norm(t).replace(/[^a-z0-9]/g,'');
 function lstPrepare(arr){
   return arr.map(a=>{const o={codigo:a[0],desc:a[1],precio:a[2],apl:a[3]||'',motos:a[4]||'',prov:a[5]||''};o._mt=parseMotos(o.motos);o._n=norm(o.codigo+' '+o.desc+' '+o.apl+' '+o.motos);o._c=compactTxt(o.desc+' '+o.apl);return o});
@@ -1810,12 +1830,12 @@ async function ensureListas(force){
   if(LST.cargando)return LST.cargando;
   if(!force&&LST.items)return;
   if(!force){
-    try{const c=JSON.parse(localStorage.getItem('pos_listas_v1')||'null');if(c&&c.items&&c.ts&&Date.now()-c.ts<12*3600*1000){LST.items=lstPrepare(c.items);LST.fecha=c.fecha||'';return}}catch(e){}
+    try{const c=JSON.parse(localStorage.getItem('pos_listas_v1')||'null');if(c&&c.items&&c.provs&&c.ts&&Date.now()-c.ts<3600*1000){LST.items=lstPrepare(c.items);LST.fecha=c.fecha||'';LST.provs=c.provs;return}}catch(e){}
   }
   LST.cargando=(async()=>{
     try{
-      const j=await api('catalogoListas');LST.items=lstPrepare(j.items||[]);LST.fecha=j.fecha||'';
-      try{localStorage.setItem('pos_listas_v1',JSON.stringify({ts:Date.now(),fecha:LST.fecha,items:j.items||[]}))}catch(e){}
+      const j=await api('catalogoListas');LST.items=lstPrepare(j.items||[]);LST.fecha=j.fecha||'';LST.provs=j.proveedores||[];
+      try{localStorage.setItem('pos_listas_v1',JSON.stringify({ts:Date.now(),fecha:LST.fecha,items:j.items||[],provs:LST.provs}))}catch(e){}
     }finally{LST.cargando=null}
   })();
   return LST.cargando;
@@ -1824,12 +1844,24 @@ function encListInfo(){
   const o=$('#enListInfo');if(!o)return;
   o.innerHTML=LST.cargando?'Cargando listas de proveedor…':(LST.items?'Listas: '+LST.items.length.toLocaleString('es-MX')+' códigos que aún no están en el inventario'+(LST.fecha?' · al '+fdmy(LST.fecha):'')+' · <button class="link" type="button" data-enact="refresh">Actualizar listas</button>':'Las listas no están cargadas.');
 }
+function encProv(){
+  const o=$('#enProv');if(!o)return;
+  if(!LST.provs||!LST.provs.length){o.innerHTML='';return}
+  const sel=E.provSel||[],chip=(v,t)=>'<label class="chk" style="display:inline-flex;margin:2px 10px 2px 0;font-size:14px"><input type="checkbox" data-prov="'+esc(v)+'"'+(sel.indexOf(v)>=0?' checked':'')+'> '+esc(t)+'</label>';
+  o.innerHTML='<div class="hint" style="margin:0 0 2px">Cotizar solo en (sin marcar = todo):</div>'+chip('INVENTARIO','Inventario')+LST.provs.map(p=>chip(String(p.hoja).toUpperCase(),p.hoja)).join('');
+}
+$('#encBody').addEventListener('change',e=>{
+  const c=e.target.closest('[data-prov]');if(!c)return;const v=c.dataset.prov,i=E.provSel.indexOf(v);
+  if(c.checked&&i<0)E.provSel.push(v);else if(!c.checked&&i>=0)E.provSel.splice(i,1);
+  enSearch();
+});
 function enResultados(q,motoTxt){
   const words=norm(q).split(/\s+/).filter(Boolean),mf=motoFilter({moto:motoTxt,anio:''}),out=[];
   const tokOk=(txt)=>mf.tokens.every(t=>txt.indexOf(t)>=0);
   const exact=String(q||'').trim().toUpperCase();
-  if(!words.length&&!mf.on)return[];
-  S.prods.forEach(p=>{
+  if(!words.length&&!mf.on&&!(E.provSel||[]).length)return[];
+  const ps=E.provSel||[],invOk=!ps.length||ps.indexOf('INVENTARIO')>=0;
+  if(invOk)S.prods.forEach(p=>{
     if(p.bateria)return;
     if(!words.every(w=>p._n.indexOf(w)>=0))return;
     if(mf.on&&!(motoMatch(p,mf)||(!p._mt.length&&tokOk(compactTxt(p.desc)))))return;
@@ -1837,6 +1869,7 @@ function enResultados(q,motoTxt){
   });
   (LST.items||[]).forEach(it=>{
     if(S.byCode[it.codigo.toUpperCase()])return;
+    if(ps.length&&ps.indexOf(String(it.prov).toUpperCase())<0)return;
     if(!words.every(w=>it._n.indexOf(w)>=0))return;
     if(mf.on&&!(it._mt.length?motoMatch(it,mf):tokOk(it._c)))return;
     out.push({codigo:it.codigo,desc:it.desc,precio:it.precio,enInv:false,existencia:0,motos:it.motos,lista:true});
@@ -1847,7 +1880,7 @@ function enResultados(q,motoTxt){
 function enSearch(){
   const box=$('#enRes');if(!box)return;
   const q=$('#enQ')?$('#enQ').value:'',m=$('#enMoto')?$('#enMoto').value:'';
-  if(!norm(q).trim()&&!norm(m).trim()){box.innerHTML='';return}
+  if(!norm(q).trim()&&!norm(m).trim()&&!(E.provSel||[]).length){box.innerHTML='';return}
   const all=enResultados(q,m),l=all.slice(0,25),admin=S.user&&S.user.rol==='admin';
   box.innerHTML=(l.length?l.map(r=>'<div class="aprow"><span style="min-width:0;overflow-wrap:anywhere"><b>'+esc(r.desc||r.codigo)+'</b><small class="hint" style="display:block;margin:0">'+esc(r.codigo)+' · '+(r.enInv?'<span style="color:var(--ok)">en inventario · hay '+r.existencia+'</span>':'solo en lista')+(r.motos?' · '+esc(r.motos):'')+'</small></span>'+
     '<span style="display:flex;gap:6px;align-items:center;flex:0 0 auto"><b>'+fmt(r.precio)+'</b>'+(admin&&!r.enInv?'<button class="mini" type="button" data-enact="moto" data-c="'+esc(r.codigo)+'" aria-label="Poner moto">Moto</button>':'')+'<button class="mini" type="button" data-enact="add" data-c="'+esc(r.codigo)+'" aria-label="Agregar">+</button></span></div>').join('')+(all.length>25?'<div class="hint">Mostrando 25 de '+all.length+'. Escribe más para afinar.</div>':''):'<div class="hint">Sin resultados.</div>');
@@ -1889,12 +1922,12 @@ function encNuevo(){
     '<div class="acard"><b>Cliente</b><div class="row" style="margin-top:6px"><input id="enCli" placeholder="Nombre del cliente" maxlength="60" autocomplete="off" value="'+esc(E.cli)+'"><input id="enTel" placeholder="Teléfono (10 dígitos)" inputmode="tel" maxlength="16" autocomplete="off" value="'+esc(E.tel)+'"></div></div>'+
     '<div class="acard"><b>Buscar piezas</b><div class="hint">Busca en tu inventario y en todas las listas de proveedor (precio al público). Para filtrar por moto escribe el modelo y, si quieres, el año.</div>'+
     '<div class="row" style="margin-top:6px"><input id="enQ" placeholder="Código o descripción" autocomplete="off"><input id="enQty" type="number" inputmode="numeric" min="1" value="1" style="max-width:80px" aria-label="Cantidad"></div>'+
-    '<input id="enMoto" placeholder="Moto (ej. FT150, XVE 2019)" autocomplete="off" style="margin-top:6px"><div class="hint" id="enListInfo" style="margin-top:6px"></div><div id="enRes" style="margin-top:6px"></div>'+
+    '<input id="enMoto" placeholder="Moto (ej. FT150, XVE 2019)" autocomplete="off" style="margin-top:6px"><div id="enProv" style="margin-top:6px"></div><div class="hint" id="enListInfo" style="margin-top:6px"></div><div id="enRes" style="margin-top:6px"></div>'+
     '<div class="hint" style="margin-top:8px">¿Ya sabes el código exacto? Agrégalo directo:</div>'+
     '<div class="row" style="margin-top:4px"><input id="enCod" placeholder="Código exacto" autocomplete="off" autocapitalize="characters"><button class="btn auto" id="enAdd" type="button" style="flex:0 0 auto">Agregar</button></div>'+
     '<div id="enErr" class="err" role="alert"></div><div id="enItems" style="margin-top:6px"></div></div>'+
     '<div class="acard" id="enPay"></div>';
-  encItems();encListInfo();enSearch();ensureListas(false).then(()=>{encListInfo();enSearch()}).catch(e=>{const o=$('#enListInfo');if(o)o.textContent='No se pudieron cargar las listas: '+errMsg(e)});
+  encItems();encListInfo();encProv();enSearch();ensureListas(false).then(()=>{encListInfo();encProv();enSearch()}).catch(e=>{const o=$('#enListInfo');if(o)o.textContent='No se pudieron cargar las listas: '+errMsg(e)});
 }
 function encItems(){
   const box=$('#enItems');if(!box)return;
@@ -2435,6 +2468,7 @@ const ACT={
   bsGo(el){return bsGo(el)},
   ajSave(el){return ajSave(el)},
   ajPts(el){return ajPts(el)},
+  ajListas(el){return ajListas(el)},
   ajPass(el){return ajPass(el)}
 };
 Object.assign(ACT,PED_ACT);
@@ -2589,7 +2623,8 @@ function buildNota(n,cfg){
   if(n.folioVenta)k.text('Por la venta: '+n.folioVenta,18,{align:'center'});
   k.rule(true);
   k.pair('IMPORTE',fmt(n.monto),30,{bold:1});
-  if(n.saldo!=null&&n.saldo<n.monto-0.004)k.pair('Saldo',fmt(n.saldo),22);
+  if(n.aplicado>0)k.pair('Usado en esta compra','-'+fmt(n.aplicado),22);
+  if(n.saldo!=null&&(n.aplicado>0||n.saldo<n.monto-0.004)){k.rule(true);k.pair('SALDO DISPONIBLE',fmt(n.saldo),24,{bold:1})}
   k.text('Vence: '+fdmy(n.vence),24,{bold:1,align:'center'});
   k.rule(true);
   k.code(n.folio);
