@@ -1885,11 +1885,12 @@ function wordHit(o,w){
   return tk.some(t=>(t.length>=4&&t.length<w.length&&w.indexOf(t)===0)||(t.length>=4&&editDist(t,w,lim)<=lim));
 }
 function qWords(q){const w=norm(q).split(/\s+/).filter(Boolean),k=w.filter(x=>STOPW.indexOf(x)<0);return k.length?k:w}
-function enResultados(q,motoTxt){
+function enResultados(q,motoTxt,provX){
   const words=qWords(q),mf=motoFilter({moto:motoTxt,anio:''}),out=[];
   const exact=String(q||'').trim().toUpperCase();
-  if(!words.length&&!mf.on&&!(E.provSel||[]).length)return[];
-  const ps=E.provSel||[],invOk=!ps.length||ps.indexOf('INVENTARIO')>=0;
+  const ps=provX||E.provSel||[];
+  if(!words.length&&!mf.on&&!ps.length)return[];
+  const invOk=!ps.length||ps.indexOf('INVENTARIO')>=0;
   if(invOk)S.prods.forEach(p=>{
     if(p.bateria)return;
     if(!words.every(w=>wordHit(p,w)))return;
@@ -1912,7 +1913,15 @@ function enSearch(){
   if(!norm(q).trim()&&!norm(m).trim()&&!(E.provSel||[]).length){box.innerHTML='';return}
   const all=enResultados(q,m),l=all.slice(0,25),admin=S.user&&S.user.rol==='admin';
   box.innerHTML=(l.length?l.map(r=>'<div class="aprow"><span style="min-width:0;overflow-wrap:anywhere"><b>'+esc(r.desc||r.codigo)+'</b><small class="hint" style="display:block;margin:0">'+esc(r.codigo)+' · '+(r.enInv?'<span style="color:var(--ok)">en inventario · hay '+r.existencia+'</span>':'solo en lista')+(r.motos?' · '+esc(r.motos):'')+'</small></span>'+
-    '<span style="display:flex;gap:6px;align-items:center;flex:0 0 auto"><b>'+fmt(r.precio)+'</b>'+(admin&&!r.enInv?'<button class="mini" type="button" data-enact="moto" data-c="'+esc(r.codigo)+'" aria-label="Poner moto">Moto</button>':'')+'<button class="mini" type="button" data-enact="add" data-c="'+esc(r.codigo)+'" aria-label="Agregar">+</button></span></div>').join('')+(all.length>25?'<div class="hint">Mostrando 25 de '+all.length+'. Escribe más para afinar.</div>':''):'<div class="hint">Sin resultados.</div>');
+    '<span style="display:flex;gap:6px;align-items:center;flex:0 0 auto"><b>'+fmt(r.precio)+'</b>'+(admin&&!r.enInv?'<button class="mini" type="button" data-enact="moto" data-c="'+esc(r.codigo)+'" aria-label="Poner moto">Moto</button>':'')+'<button class="mini" type="button" data-enact="add" data-c="'+esc(r.codigo)+'" aria-label="Agregar">+</button></span></div>').join('')+(all.length>25?'<div class="hint">Mostrando 25 de '+all.length+'. Escribe más para afinar.</div>':''):enVacio(q,m));
+}
+// cuando no hay resultados, dice qué filtro los está escondiendo
+function enVacio(q,m){
+  const tieneMoto=!!norm(m).trim(),tieneProv=(E.provSel||[]).length>0,h=[];
+  if(tieneMoto){const n=enResultados(q,'').length;if(n)h.push('Sin el filtro de moto "'+esc(m.trim())+'" hay '+n+' resultado(s) · <button class="link" type="button" data-enact="nomoto" style="width:auto;margin:0;padding:0">quitar moto</button>')}
+  if(tieneProv){const n=enResultados(q,m,[]).length;if(n)h.push('En todas las listas e inventario hay '+n+' · <button class="link" type="button" data-enact="noprov" style="width:auto;margin:0;padding:0">quitar proveedor</button>')}
+  if(tieneMoto&&tieneProv){const n=enResultados(q,'',[]).length;if(n)h.push('Sin moto ni proveedor hay '+n)}
+  return '<div class="hint">Sin resultados.'+(h.length?'<br>'+h.join('<br>'):'<br>Prueba con menos palabras (solo la pieza, por ejemplo "cople carburador") o con otra escritura.')+'</div>';
 }
 function enAddResult(codigo){
   const r=enResultados(codigo,'').find(x=>x.codigo.toUpperCase()===String(codigo).toUpperCase());if(!r)return;
@@ -1937,6 +1946,8 @@ $('#encBody').addEventListener('click',e=>{
   const b=e.target.closest('[data-enact]');if(!b)return;
   if(b.dataset.enact==='add')enAddResult(b.dataset.c);
   else if(b.dataset.enact==='moto')enSetMoto(b.dataset.c);
+  else if(b.dataset.enact==='nomoto'){$('#enMoto').value='';enSearch()}
+  else if(b.dataset.enact==='noprov'){E.provSel=[];encProv();enSearch()}
   else if(b.dataset.enact==='refresh'){encListInfo();const o=$('#enListInfo');if(o)o.textContent='Actualizando listas…';ensureListas(true).then(()=>{encListInfo();enSearch()}).catch(er=>{if(o)o.textContent='No se pudieron cargar las listas: '+errMsg(er)})}
 });
 $('#encBody').addEventListener('input',e=>{if(e.target.id==='enQ'||e.target.id==='enMoto'){clearTimeout(enT);enT=setTimeout(enSearch,150)}});
