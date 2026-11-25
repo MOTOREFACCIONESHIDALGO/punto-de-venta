@@ -1786,7 +1786,7 @@ async function ajListasCargar(){
 async function ajListas(el){
   const bl=$$('#ajLisBox [data-lis]').filter(c=>!c.checked).map(c=>c.dataset.lis);
   await busy(el,'Guardando…',async()=>{
-    try{const j=await api('saveConfig',{ListasBloqueadas:bl});S.config=j.config||S.config;try{localStorage.removeItem('pos_listas_v1')}catch(e){}LST.items=null;$('#ajLMsg').textContent=bl.length?'Guardado ✓ · bloqueadas: '+bl.join(', '):'Guardado ✓ · todas permitidas'}
+    try{const j=await api('saveConfig',{ListasBloqueadas:bl});S.config=j.config||S.config;idbDel('listas_v2');LST.items=null;$('#ajLMsg').textContent=bl.length?'Guardado ✓ · bloqueadas: '+bl.join(', '):'Guardado ✓ · todas permitidas'}
     catch(e){failToast(e)}
   });
 }
@@ -1847,16 +1847,22 @@ const compactTxt=t=>norm(t).replace(/[^a-z0-9]/g,'');
 function lstPrepare(arr){
   return arr.map(a=>{const o={codigo:a[0],desc:a[1],precio:a[2],apl:a[3]||'',motos:a[4]||'',prov:a[5]||''};o._mt=parseMotos(o.motos);o._n=norm(o.codigo+' '+o.desc+' '+o.apl+' '+o.motos);o._c=compactTxt(o.desc+' '+o.apl);return o});
 }
+/* caché de las listas en IndexedDB (localStorage solo aguanta ~5 MB y las listas son más grandes) */
+function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open('pos_cache',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function idbGet(k){try{const d=await idbOpen();return await new Promise((res,rej)=>{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}catch(e){return null}}
+async function idbSet(k,v){try{const d=await idbOpen();await new Promise((res,rej)=>{const tx=d.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}catch(e){}}
+async function idbDel(k){try{const d=await idbOpen();await new Promise((res,rej)=>{const tx=d.transaction('kv','readwrite');tx.objectStore('kv').delete(k);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)})}catch(e){}}
 async function ensureListas(force){
   if(LST.cargando)return LST.cargando;
   if(!force&&LST.items)return;
   if(!force){
-    try{const c=JSON.parse(localStorage.getItem('pos_listas_v1')||'null');if(c&&c.items&&c.provs&&c.ts&&Date.now()-c.ts<3600*1000){LST.items=lstPrepare(c.items);LST.fecha=c.fecha||'';LST.provs=c.provs;return}}catch(e){}
+    try{localStorage.removeItem('pos_listas_v1')}catch(e){}
+    const c=await idbGet('listas_v2');if(c&&c.items&&c.provs&&c.ts&&Date.now()-c.ts<3600*1000){LST.items=lstPrepare(c.items);LST.fecha=c.fecha||'';LST.provs=c.provs;return}
   }
   LST.cargando=(async()=>{
     try{
       const j=await api('catalogoListas');LST.items=lstPrepare(j.items||[]);LST.fecha=j.fecha||'';LST.provs=j.proveedores||[];
-      try{localStorage.setItem('pos_listas_v1',JSON.stringify({ts:Date.now(),fecha:LST.fecha,items:j.items||[],provs:LST.provs}))}catch(e){}
+      idbSet('listas_v2',{ts:Date.now(),fecha:LST.fecha,items:j.items||[],provs:LST.provs});
     }finally{LST.cargando=null}
   })();
   return LST.cargando;
@@ -1880,16 +1886,32 @@ $('#encBody').addEventListener('change',e=>{
 // cada palabra del modelo debe aparecer en el texto; si el texto trae años y se pidió un año, debe caer en algún rango
 function descMoto(o){
   if(o._dm)return o._dm;
-  const t=norm(String(o.desc||'')+' '+String(o.apl||'')),yrs=[];let m;
-  const re=/((?:19|20)\d{2})\s*(?:-|a|al|hasta)\s*((?:19|20)\d{2})|((?:19|20)\d{2})\s*(\+|en adelante|y mas)|\b((?:19|20)\d{2})\b/g;
-  while((m=re.exec(t))){if(m[1])yrs.push([+m[1],+m[2]]);else if(m[3])yrs.push([+m[3],9999]);else yrs.push([+m[5],+m[5]])}
-  return(o._dm={c:compactTxt(t.replace(/\b(?:19|20)\d{2}\b/g,' ')),yrs:yrs});
+  const yy=n=>n>=100?n:(n>50?1900+n:2000+n),segs=[];
+  [o.desc,o.apl].forEach(txt=>{
+    const loc=[];
+    norm(String(txt||'')).split(/\s*\/\s*|;/).forEach(raw=>{
+      let t=raw.trim();if(!t)return;const yrs=[];let m;
+      const re=/\b((?:19|20)\d{2})\s*(?:-|a|al|hasta)\s*((?:19|20)\d{2})\b|\b((?:19|20)\d{2})\s*(?:\+|en adelante|y mas)|\b((?:19|20)\d{2})\b/g;
+      while((m=re.exec(t))){if(m[1])yrs.push([+m[1],+m[2]]);else if(m[3])yrs.push([+m[3],9999]);else yrs.push([+m[4],+m[4]])}
+      t=t.replace(re,' ');
+      // años de 2 dígitos al final del tramo: "IT D-125 16-22", "IT DM-300 24", "IT AT-125 RT 20"
+      if((m=t.match(/(?:^|\s)(\d{2})(?:\s*-\s*(\d{2}))?\s*\+?\s*$/))&&/[a-z]/.test(t.slice(0,m.index))){yrs.push([yy(+m[1]),m[2]?yy(+m[2]):(/\+\s*$/.test(raw)?9999:yy(+m[1]))]);t=t.slice(0,m.index)}
+      loc.push({c:compactTxt(t),yrs:yrs,y4:yrs.length>0&&!/\d{2}\s*(?:-\s*\d{2})?\s*\+?\s*$/.test(raw.replace(/\b(?:19|20)\d{2}/g,''))&&/(?:19|20)\d{2}/.test(raw)});
+    });
+    // "FT150/FT125 2012-2022": los años completos del último tramo valen también para los tramos anteriores sin años
+    let carry=null;for(let i=loc.length-1;i>=0;i--){if(loc[i].y4)carry=loc[i].yrs;else if(!loc[i].yrs.length&&carry)loc[i].yrs=carry}
+    loc.forEach(x=>segs.push(x));
+  });
+  return(o._dm={segs:segs});
 }
+const MARCAS={italika:'it',vento:'vn',bajaj:'bj',honda:'ho'};
 function descMatch(o,mf){
-  const d=descMoto(o);
-  if(mf.tokens.length&&!mf.tokens.every(t=>d.c.indexOf(t)>=0))return false;
-  if(mf.anio!=null&&d.yrs.length&&!d.yrs.some(r=>mf.anio>=r[0]&&mf.anio<=r[1]))return false;
-  return mf.tokens.length>0||(mf.anio!=null&&d.yrs.length>0);
+  if(!mf.tokens.length&&mf.anio==null)return false;
+  return descMoto(o).segs.some(sg=>{
+    if(mf.tokens.length&&!mf.tokens.every(t=>sg.c.indexOf(t)>=0||(MARCAS[t]&&sg.c.indexOf(MARCAS[t])===0)))return false;
+    if(mf.anio!=null){if(!sg.yrs.length)return mf.tokens.length>0;if(!sg.yrs.some(r=>mf.anio>=r[0]&&mf.anio<=r[1]))return false}
+    return true;
+  });
 }
 // Búsqueda tolerante: ignora "de/del/para…", perdona una letra mal escrita ("carbutador" = "carburador") y acepta abreviaturas ("carb")
 const STOPW=['de','del','la','el','los','las','para','y','con','en','a','un','una'];
@@ -1967,7 +1989,7 @@ async function enSetMoto(codigo){
   try{
     await api('saveMotosLista',{codigo:it.codigo,motos:v});
     it.motos=v.replace(/[\r\n]+/g,'; ').trim();it._mt=parseMotos(it.motos);it._n=norm(it.codigo+' '+it.desc+' '+it.apl+' '+it.motos);
-    try{const c=JSON.parse(localStorage.getItem('pos_listas_v1')||'null');if(c){const a=c.items.find(x=>String(x[0]).toUpperCase()===it.codigo.toUpperCase());if(a){a[4]=it.motos;localStorage.setItem('pos_listas_v1',JSON.stringify(c))}}}catch(e){}
+    idbDel('listas_v2');
     toast('Moto guardada');enSearch();
   }catch(e){failToast(e)}
 }
