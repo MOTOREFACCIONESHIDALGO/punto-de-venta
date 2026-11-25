@@ -735,7 +735,7 @@ $('#btnLogout').addEventListener('click',async()=>{
    =================================================================== */
 async function loadCatalog(){
   const j=await api('catalog');
-  S.prods=j.productos||[];S.config=j.config||S.config;setSyn(j.sinonimos);
+  S.prods=j.productos||[];S.config=j.config||S.config;setSyn(j.sinonimos);aplicarInvApl();
   S.descCfg=j.descuentos||S.descCfg;encBadge(j.encargosListos||0);
   S.byCode={};
   S.prods.forEach(p=>{p.equiv=Array.isArray(p.equiv)?p.equiv:[];p._mt=parseMotos(p.motos);p._rel=[];S.byCode[String(p.codigo).toUpperCase()]=p});
@@ -1786,7 +1786,7 @@ async function ajListasCargar(){
 async function ajListas(el){
   const bl=$$('#ajLisBox [data-lis]').filter(c=>!c.checked).map(c=>c.dataset.lis);
   await busy(el,'Guardando…',async()=>{
-    try{const j=await api('saveConfig',{ListasBloqueadas:bl});S.config=j.config||S.config;idbDel('listas_v2');LST.items=null;$('#ajLMsg').textContent=bl.length?'Guardado ✓ · bloqueadas: '+bl.join(', '):'Guardado ✓ · todas permitidas'}
+    try{const j=await api('saveConfig',{ListasBloqueadas:bl});S.config=j.config||S.config;idbDel('listas_v3');LST.items=null;$('#ajLMsg').textContent=bl.length?'Guardado ✓ · bloqueadas: '+bl.join(', '):'Guardado ✓ · todas permitidas'}
     catch(e){failToast(e)}
   });
 }
@@ -1842,7 +1842,13 @@ const encBody=()=>$('#encBody');
 
 
 /* ---- listas de proveedor en el dispositivo (solo código, descripción y precio al público) ---- */
-const LST={items:null,fecha:'',cargando:null,provs:[]};
+const LST={items:null,fecha:'',cargando:null,provs:[],invApl:[]};
+// las piezas que ya están en inventario toman de su lista de proveedor las motos/años para poder buscarlas
+function aplicarInvApl(){
+  if(!LST.invApl||!LST.invApl.length||!S.prods||!S.prods.length)return;
+  const m={};LST.invApl.forEach(a=>m[String(a[0]).toUpperCase()]=a);
+  S.prods.forEach(p=>{const a=m[p.codigo.toUpperCase()];if(!a||p._aplSrc===a[1])return;p.apl=a[1];p.provL=String(a[2]).toUpperCase();p._aplSrc=a[1];p._dm=null;p._tk=null});
+}
 const compactTxt=t=>norm(t).replace(/[^a-z0-9]/g,'');
 function lstPrepare(arr){
   return arr.map(a=>{const o={codigo:a[0],desc:a[1],precio:a[2],apl:a[3]||'',motos:a[4]||'',prov:a[5]||''};o._mt=parseMotos(o.motos);o._n=norm(o.codigo+' '+o.desc+' '+o.apl+' '+o.motos);o._c=compactTxt(o.desc+' '+o.apl);return o});
@@ -1857,12 +1863,12 @@ async function ensureListas(force){
   if(!force&&LST.items)return;
   if(!force){
     try{localStorage.removeItem('pos_listas_v1')}catch(e){}
-    const c=await idbGet('listas_v2');if(c&&c.items&&c.provs&&c.ts&&Date.now()-c.ts<3600*1000){LST.items=lstPrepare(c.items);LST.fecha=c.fecha||'';LST.provs=c.provs;return}
+    const c=await idbGet('listas_v3');if(c&&c.items&&c.provs&&c.ts&&Date.now()-c.ts<3600*1000){LST.items=lstPrepare(c.items);LST.fecha=c.fecha||'';LST.provs=c.provs;LST.invApl=c.invApl||[];aplicarInvApl();return}
   }
   LST.cargando=(async()=>{
     try{
-      const j=await api('catalogoListas');LST.items=lstPrepare(j.items||[]);LST.fecha=j.fecha||'';LST.provs=j.proveedores||[];
-      idbSet('listas_v2',{ts:Date.now(),fecha:LST.fecha,items:j.items||[],provs:LST.provs});
+      const j=await api('catalogoListas');LST.items=lstPrepare(j.items||[]);LST.fecha=j.fecha||'';LST.provs=j.proveedores||[];LST.invApl=j.invApl||[];aplicarInvApl();
+      idbSet('listas_v3',{ts:Date.now(),fecha:LST.fecha,items:j.items||[],provs:LST.provs,invApl:LST.invApl});
     }finally{LST.cargando=null}
   })();
   return LST.cargando;
@@ -1939,9 +1945,10 @@ function enResultados(q,motoTxt,provX){
   const exact=String(q||'').trim().toUpperCase();
   const ps=provX||E.provSel||[];
   if(!words.length&&!mf.on&&!ps.length)return[];
-  const invOk=!ps.length||ps.indexOf('INVENTARIO')>=0;
+  const invOk=true;
   if(invOk)S.prods.forEach(p=>{
     if(p.bateria)return;
+    if(ps.length&&ps.indexOf('INVENTARIO')<0&&!(p.provL&&ps.indexOf(p.provL)>=0))return;
     if(!units.every(u=>unitHit(p,u,true)))return;
     if(mf.on&&!(motoMatch(p,mf)||descMatch(p,mf)))return;
     out.push({codigo:p.codigo,desc:p.desc,precio:p.precio,enInv:true,existencia:p.existencia,motos:p.motos,fit:fitTxt(p)});
@@ -1989,7 +1996,7 @@ async function enSetMoto(codigo){
   try{
     await api('saveMotosLista',{codigo:it.codigo,motos:v});
     it.motos=v.replace(/[\r\n]+/g,'; ').trim();it._mt=parseMotos(it.motos);it._n=norm(it.codigo+' '+it.desc+' '+it.apl+' '+it.motos);
-    idbDel('listas_v2');
+    idbDel('listas_v3');
     toast('Moto guardada');enSearch();
   }catch(e){failToast(e)}
 }
